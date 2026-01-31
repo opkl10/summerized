@@ -23,10 +23,28 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 
 # בדוק אם יש commits שלא נדחפו
-unpushed=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
-if [ "$unpushed" -eq 0 ] && [ -z "$(git status --porcelain)" ]; then
+# נסה fetch קודם (אבל אל תכשל אם זה לא עובד)
+git fetch origin 2>/dev/null || true
+
+# בדוק אם יש commits מקומיים שלא נדחפו
+unpushed_commits=$(git log origin/main..HEAD --oneline 2>/dev/null)
+unpushed_count=$(echo "$unpushed_commits" | grep -c . || echo "0")
+
+# אם אין שינויים ולא staged ולא commits לדחיפה
+if [ -z "$(git status --porcelain)" ] && [ "$unpushed_count" -eq 0 ]; then
     echo "✅ הכל מעודכן - אין שינויים לדחיפה"
+    echo ""
+    echo "💡 טיפ: אם הוספת שינויים, ודא ששמרת אותם ב-git:"
+    echo "   git add ."
+    echo "   git commit -m 'הודעת commit'"
     exit 0
+fi
+
+# אם יש commits לדחיפה, הצג אותם
+if [ "$unpushed_count" -gt 0 ]; then
+    echo "📦 נמצאו $unpushed_count commits לדחיפה:"
+    echo "$unpushed_commits" | head -5
+    echo ""
 fi
 
 # Push
