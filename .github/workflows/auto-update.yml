@@ -5,6 +5,7 @@ on:
     branches:
       - main
     paths:
+      - 'claude-ai-summarizer.php'
       - '**/*.php'
       - '**/*.css'
       - '**/*.js'
@@ -13,50 +14,119 @@ on:
 jobs:
   create-release:
     runs-on: ubuntu-latest
-    
+    permissions:
+      contents: write  # Required to create releases
+      id-token: write  # Required for OIDC
+      
     steps:
     - name: Checkout code
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch all history to compare versions
     
-    - name: Get version from plugin
+    - name: Get current version from plugin
       id: get_version
       run: |
         VERSION=$(grep "Version:" claude-ai-summarizer.php | head -1 | sed -e 's/.*Version: *\([0-9.]*\).*/\1/')
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Version: $VERSION"
     
+    - name: Check if version changed
+      id: check_version
+      run: |
+        CURRENT_VERSION="${{ steps.get_version.outputs.version }}"
+        
+        # Get the last release tag
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        
+        if [ -z "$LAST_TAG" ]; then
+          echo "No previous release found. Creating first release."
+          echo "should_create=true" >> $GITHUB_OUTPUT
+        else
+          # Remove 'v' prefix if exists
+          LAST_VERSION=$(echo "$LAST_TAG" | sed 's/^v//')
+          
+          echo "Last release version: $LAST_VERSION"
+          echo "Current version: $CURRENT_VERSION"
+          
+          # Compare versions
+          if [ "$CURRENT_VERSION" != "$LAST_VERSION" ]; then
+            echo "Version changed! Creating new release."
+            echo "should_create=true" >> $GITHUB_OUTPUT
+            echo "last_version=$LAST_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "Version unchanged. Skipping release."
+            echo "should_create=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+    
     - name: Create ZIP file
+      if: steps.check_version.outputs.should_create == 'true'
       run: |
         zip -r claude-ai-summarizer-${{ steps.get_version.outputs.version }}.zip \
           claude-ai-summarizer.php \
           templates/ \
           assets/ \
           README.md \
-          -x "*.git*" ".github/*"
+          uninstall.php \
+          -x "*.git*" ".github/*" "*.sh" "*.md" "CHANGELOG.md"
+    
+    - name: Get commit messages since last release
+      if: steps.check_version.outputs.should_create == 'true'
+      id: get_changelog
+      run: |
+        LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+        if [ -z "$LAST_TAG" ]; then
+          COMMITS=$(git log --oneline --pretty=format:"- %s" | head -20)
+        else
+          COMMITS=$(git log $LAST_TAG..HEAD --oneline --pretty=format:"- %s")
+        fi
+        
+        if [ -z "$COMMITS" ]; then
+          COMMITS="- עדכון גרסה ל-${{ steps.get_version.outputs.version }}"
+        fi
+        
+        echo "changelog<<EOF" >> $GITHUB_OUTPUT
+        echo "$COMMITS" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
     
     - name: Create Release
+      if: steps.check_version.outputs.should_create == 'true'
       uses: softprops/action-gh-release@v1
       with:
         tag_name: v${{ steps.get_version.outputs.version }}
         name: Release v${{ steps.get_version.outputs.version }}
         body: |
-          עדכון אוטומטי של Claude AI Summarizer WordPress Plugin
+          ## עדכון אוטומטי - Claude AI Summarizer WordPress Plugin
           
-          ## שינויים
-          - עדכון אוטומטי מ-GitHub
-          - כפתור סיכום אוטומטי בפוסטים
-          - שיפורי ביצועים
+          ### גרסה: v${{ steps.get_version.outputs.version }}
           
-          ## התקנה
+          ### שינויים:
+          ${{ steps.get_changelog.outputs.changelog }}
+          
+          ---
+          
+          ### התקנה:
           1. הורד את הקובץ ZIP
-          2. העלה ל-WordPress דרך Plugins → Add New → Upload Plugin
-          3. או עדכן דרך GitHub Repository
+          2. העלה ל-WordPress דרך **Plugins → Add New → Upload Plugin**
+          3. או עדכן אוטומטית דרך הגדרות הפלאגין
+          
+          ### עדכון אוטומטי:
+          הפלאגין יבדוק אוטומטית לעדכונים כל 2 שעות, או תוכל לבדוק ידנית דרך **Settings → Claude Summarizer → עדכון אוטומטי**
         files: |
           claude-ai-summarizer-${{ steps.get_version.outputs.version }}.zip
         draft: false
         prerelease: false
+        generate_release_notes: false
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Skip Release (version unchanged)
+      if: steps.check_version.outputs.should_create == 'false'
+      run: |
+        echo "⏭️  Version unchanged. Skipping release creation."
+        echo "Current version: ${{ steps.get_version.outputs.version }}"
+        echo "Last release: ${{ steps.check_version.outputs.last_version }}"
     
     - name: Notify WordPress via Webhook
       if: success()
