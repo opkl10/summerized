@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 1.4.1
+ * Version: 1.4.2
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '1.4.1');
+define('CLAUDE_SUMMARIZER_VERSION', '1.4.2');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1134,6 +1134,13 @@ class Claude_AI_Summarizer {
         $temp_dir = get_temp_dir();
         $extract_to = $temp_dir . 'claude-update-' . uniqid();
         
+        // Create the extraction directory
+        if (!wp_mkdir_p($extract_to)) {
+            error_log('Claude AI Summarizer: Failed to create extraction directory: ' . $extract_to);
+            @unlink($temp_file);
+            return false;
+        }
+        
         // Extract ZIP file
         if (!class_exists('ZipArchive')) {
             error_log('Claude AI Summarizer: ZipArchive class not available');
@@ -1195,7 +1202,14 @@ class Claude_AI_Summarizer {
         }
         
         // Copy files from extracted directory to plugin directory
-        $this->copy_directory($extracted_plugin_dir, $plugin_path);
+        $copy_result = $this->copy_directory($extracted_plugin_dir, $plugin_path);
+        
+        if (!$copy_result) {
+            error_log('Claude AI Summarizer: Failed to copy files to plugin directory');
+            $this->delete_directory($extract_to);
+            @unlink($temp_file);
+            return false;
+        }
         
         // Clean up
         $this->delete_directory($extract_to);
@@ -1237,15 +1251,25 @@ class Claude_AI_Summarizer {
      * Copy directory recursively
      */
     private function copy_directory($source, $destination) {
+        if (!is_dir($source)) {
+            error_log('Claude AI Summarizer: Source directory does not exist: ' . $source);
+            return false;
+        }
+        
         if (!is_dir($destination)) {
-            wp_mkdir_p($destination);
+            if (!wp_mkdir_p($destination)) {
+                error_log('Claude AI Summarizer: Failed to create destination directory: ' . $destination);
+                return false;
+            }
         }
         
         $dir = opendir($source);
         if (!$dir) {
+            error_log('Claude AI Summarizer: Failed to open source directory: ' . $source);
             return false;
         }
         
+        $success = true;
         while (($file = readdir($dir)) !== false) {
             if ($file === '.' || $file === '..') {
                 continue;
@@ -1255,14 +1279,19 @@ class Claude_AI_Summarizer {
             $dest_file = $destination . '/' . $file;
             
             if (is_dir($source_file)) {
-                $this->copy_directory($source_file, $dest_file);
+                if (!$this->copy_directory($source_file, $dest_file)) {
+                    $success = false;
+                }
             } else {
-                copy($source_file, $dest_file);
+                if (!copy($source_file, $dest_file)) {
+                    error_log('Claude AI Summarizer: Failed to copy file: ' . $source_file . ' to ' . $dest_file);
+                    $success = false;
+                }
             }
         }
         
         closedir($dir);
-        return true;
+        return $success;
     }
     
     /**
@@ -1409,12 +1438,14 @@ class Claude_AI_Summarizer {
                     'version' => $version
                 ));
             } else {
-                $error_message = __('Failed to install update. Please check WordPress debug logs for details.', 'claude-ai-summarizer');
+                $error_message = __('Failed to install update. ', 'claude-ai-summarizer');
                 
                 // Check if there are specific error messages in logs
                 $last_error = error_get_last();
                 if ($last_error && (strpos($last_error['message'], 'Claude AI Summarizer') !== false || strpos($last_error['file'], 'claude-ai-summarizer') !== false)) {
-                    $error_message = __('Update failed: ', 'claude-ai-summarizer') . $last_error['message'];
+                    $error_message .= $last_error['message'];
+                } else {
+                    $error_message .= __('Please check WordPress debug logs for details. Common issues: insufficient file permissions, missing ZipArchive class, or network timeout.', 'claude-ai-summarizer');
                 }
                 
                 wp_send_json_error(array('message' => $error_message));
@@ -1422,8 +1453,16 @@ class Claude_AI_Summarizer {
         } catch (Exception $e) {
             restore_error_handler();
             error_log('Claude AI Summarizer: Exception during update: ' . $e->getMessage());
+            error_log('Claude AI Summarizer: Exception trace: ' . $e->getTraceAsString());
             wp_send_json_error(array(
                 'message' => __('Update failed with exception: ', 'claude-ai-summarizer') . $e->getMessage()
+            ));
+        } catch (Error $e) {
+            restore_error_handler();
+            error_log('Claude AI Summarizer: Fatal error during update: ' . $e->getMessage());
+            error_log('Claude AI Summarizer: Error trace: ' . $e->getTraceAsString());
+            wp_send_json_error(array(
+                'message' => __('Update failed with fatal error: ', 'claude-ai-summarizer') . $e->getMessage()
             ));
         }
     }
