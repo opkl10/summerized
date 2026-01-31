@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 1.3.2
+ * Version: 1.4.1
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '1.3.2');
+define('CLAUDE_SUMMARIZER_VERSION', '1.4.1');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1052,6 +1052,15 @@ class Claude_AI_Summarizer {
         $latest_version_clean = preg_replace('/[^0-9.]/', '', $latest_version);
         $current_version_clean = preg_replace('/[^0-9.]/', '', $current_version);
         
+        // Log for debugging
+        error_log('Claude AI Summarizer: Version check - Latest: ' . $latest_version . ' (' . $latest_version_clean . '), Current: ' . $current_version . ' (' . $current_version_clean . ')');
+        
+        // Compare versions
+        $version_comparison = version_compare($latest_version_clean, $current_version_clean);
+        
+        // Log comparison result
+        error_log('Claude AI Summarizer: Version comparison result: ' . $version_comparison . ' (1=newer, 0=same, -1=older)');
+        
         update_option('claude_last_update_check', time());
         update_option('claude_last_check_result', array(
             'latest_version' => $latest_version,
@@ -1059,11 +1068,9 @@ class Claude_AI_Summarizer {
             'current_version' => $current_version,
             'current_version_clean' => $current_version_clean,
             'check_time' => current_time('mysql'),
-            'version_comparison' => version_compare($latest_version_clean, $current_version_clean, '>') ? 'newer' : (version_compare($latest_version_clean, $current_version_clean, '<') ? 'older' : 'same')
+            'version_comparison' => $version_comparison > 0 ? 'newer' : ($version_comparison < 0 ? 'older' : 'same'),
+            'comparison_result' => $version_comparison
         ));
-        
-        // Compare versions
-        $version_comparison = version_compare($latest_version_clean, $current_version_clean);
         
         if ($version_comparison > 0) {
             // New version available
@@ -1300,6 +1307,12 @@ class Claude_AI_Summarizer {
         
         // Clear last check time to force immediate check
         delete_option('claude_last_update_check');
+        
+        // Also clear any cached update status to force fresh check
+        delete_option('claude_update_available');
+        delete_option('claude_update_version');
+        delete_option('claude_update_download_url');
+        delete_option('claude_update_error');
         
         // Perform check
         $this->check_and_update_from_github();

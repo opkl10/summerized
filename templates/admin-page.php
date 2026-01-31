@@ -14,6 +14,34 @@ if (!defined('ABSPATH')) {
     }
     ?>
     
+    <!-- Welcome Section -->
+    <div class="claude-welcome-section" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 30px; border-radius: 10px; margin: 20px 0; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);">
+        <h2 style="margin-top: 0; color: white; font-size: 28px; margin-bottom: 15px;">
+            👋 ברוכים הבאים ל-Claude AI Summarizer!
+        </h2>
+        <p style="font-size: 16px; line-height: 1.8; margin-bottom: 20px; color: rgba(255, 255, 255, 0.95);">
+            הפלאגין החכם שלך לסיכום אוטומטי של פוסטים ומאמרים באמצעות Claude AI. 
+            פשוט הגדר את ה-API Key שלך והתחל להשתמש - הכפתור יופיע אוטומטית בכל פוסט!
+        </p>
+        <div style="display: flex; gap: 20px; flex-wrap: wrap; margin-top: 20px;">
+            <div style="flex: 1; min-width: 200px; background: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 8px; backdrop-filter: blur(10px);">
+                <strong style="display: block; margin-bottom: 8px; font-size: 18px;">⚡ מהיר וקל</strong>
+                <span style="font-size: 14px; opacity: 0.9;">סיכום אוטומטי בלחיצה אחת</span>
+            </div>
+            <div style="flex: 1; min-width: 200px; background: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 8px; backdrop-filter: blur(10px);">
+                <strong style="display: block; margin-bottom: 8px; font-size: 18px;">🎨 מותאם אישית</strong>
+                <span style="font-size: 14px; opacity: 0.9;">צבעים, טקסט ומיקום</span>
+            </div>
+            <div style="flex: 1; min-width: 200px; background: rgba(255, 255, 255, 0.15); padding: 15px; border-radius: 8px; backdrop-filter: blur(10px);">
+                <strong style="display: block; margin-bottom: 8px; font-size: 18px;">🔄 עדכון אוטומטי</strong>
+                <span style="font-size: 14px; opacity: 0.9;">מתעדכן מ-GitHub אוטומטית</span>
+            </div>
+        </div>
+        <p style="margin-top: 20px; font-size: 14px; opacity: 0.9; border-top: 1px solid rgba(255, 255, 255, 0.2); padding-top: 15px;">
+            💡 <strong>טיפ:</strong> התחל בהגדרת ה-API Key למטה, ואז התאם את המראה וההתנהגות של הכפתור לפי הטעם שלך.
+        </p>
+    </div>
+    
     <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
         <input type="hidden" name="action" value="claude_save_settings">
         <?php wp_nonce_field('claude_summarizer_settings-options'); ?>
@@ -405,6 +433,34 @@ if (!defined('ABSPATH')) {
                         <button type="button" class="button button-secondary" id="claude-check-update-now">
                             בדוק עכשיו
                         </button>
+                        <?php 
+                        $last_check_result = get_option('claude_last_check_result', array());
+                        if (!empty($last_check_result) && isset($last_check_result['latest_version'])): 
+                        ?>
+                            <br><br>
+                            <details style="margin-top: 10px;">
+                                <summary style="cursor: pointer; color: #0073aa;">🔍 פרטי בדיקה אחרונה</summary>
+                                <div style="margin-top: 10px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 12px;">
+                                    <strong>גרסה אחרונה ב-GitHub:</strong> <?php echo esc_html($last_check_result['latest_version']); ?><br>
+                                    <strong>גרסה נוכחית:</strong> <?php echo esc_html($last_check_result['current_version']); ?><br>
+                                    <?php if (isset($last_check_result['comparison_result'])): ?>
+                                        <strong>תוצאת השוואה:</strong> 
+                                        <?php 
+                                        $comp = $last_check_result['comparison_result'];
+                                        if ($comp > 0) {
+                                            echo '<span style="color: green;">✓ גרסה חדשה זמינה</span>';
+                                        } elseif ($comp === 0) {
+                                            echo '<span style="color: orange;">= גרסה זהה</span>';
+                                        } else {
+                                            echo '<span style="color: red;">✗ גרסה ישנה יותר</span>';
+                                        }
+                                        ?>
+                                        <br>
+                                    <?php endif; ?>
+                                    <strong>זמן בדיקה:</strong> <?php echo esc_html($last_check_result['check_time'] ?? 'לא זמין'); ?>
+                                </div>
+                            </details>
+                        <?php endif; ?>
                     </td>
                 </tr>
                 <?php
