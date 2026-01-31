@@ -33,6 +33,11 @@
             });
         }
         
+        // Apply custom panel color if set
+        if (claudeFrontend.panelColor) {
+            $panel.find('.claude-panel-header').css('background', 'linear-gradient(135deg, ' + claudeFrontend.panelColor + ' 0%, ' + adjustBrightness(claudeFrontend.panelColor, -30) + ' 100%)');
+        }
+        
         // Apply custom icon if set and show_icon is enabled
         if (claudeFrontend.showIcon) {
             if (claudeFrontend.buttonIcon) {
@@ -109,7 +114,50 @@
                 },
                 success: function(response) {
                     if (response.success) {
-                        $panelContent.html('<p>' + response.data.summary + '</p>');
+                        var summary = response.data.summary;
+                        
+                        // Format summary based on length
+                        if (claudeFrontend.summaryLength === 'short') {
+                            // Convert to bullet points if not already formatted
+                            if (summary.indexOf('-') === -1 && summary.indexOf('•') === -1 && summary.indexOf('*') === -1) {
+                                // Split by sentences and create bullets
+                                var sentences = summary.split(/[.!?]\s+/).filter(function(s) { return s.trim().length > 0; });
+                                if (sentences.length > 0) {
+                                    summary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
+                                    sentences.forEach(function(sentence) {
+                                        if (sentence.trim().length > 0) {
+                                            summary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
+                                                      '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
+                                                      '<span style="display: block; padding-right: 15px;">' + sentence.trim() + '</span>' + 
+                                                      '</li>';
+                                        }
+                                    });
+                                    summary += '</ul>';
+                                }
+                            } else {
+                                // Already has bullets, format them nicely
+                                summary = summary.replace(/^[-•*]\s*/gm, '');
+                                var lines = summary.split(/\n/).filter(function(l) { return l.trim().length > 0; });
+                                if (lines.length > 0) {
+                                    summary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
+                                    lines.forEach(function(line) {
+                                        if (line.trim().length > 0) {
+                                            summary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
+                                                      '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
+                                                      '<span style="display: block; padding-right: 15px;">' + line.trim() + '</span>' + 
+                                                      '</li>';
+                                        }
+                                    });
+                                    summary += '</ul>';
+                                } else {
+                                    summary = '<p style="line-height: 1.8;">' + summary + '</p>';
+                                }
+                            }
+                        } else {
+                            summary = '<p style="line-height: 1.8;">' + summary + '</p>';
+                        }
+                        
+                        $panelContent.html(summary);
                         
                         // Store summary for copy
                         $panel.data('summary', response.data.summary);

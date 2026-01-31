@@ -163,6 +163,27 @@ if (!defined('ABSPATH')) {
                 
                 <tr>
                     <th scope="row">
+                        <label for="claude_panel_color">צבע חלונית</label>
+                    </th>
+                    <td>
+                        <input type="color" 
+                               id="claude_panel_color" 
+                               name="claude_panel_color" 
+                               value="<?php echo esc_attr(get_option('claude_panel_color', '#667eea')); ?>" 
+                               style="width: 100px; height: 40px;" />
+                        <input type="text" 
+                               id="claude_panel_color_text" 
+                               value="<?php echo esc_attr(get_option('claude_panel_color', '#667eea')); ?>" 
+                               style="width: 100px; margin-right: 10px;" 
+                               placeholder="#667eea" />
+                        <p class="description">
+                            בחר צבע לראש החלונית שנפתחת
+                        </p>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row">
                         <label for="claude_button_text">טקסט כפתור</label>
                     </th>
                     <td>
@@ -248,7 +269,29 @@ if (!defined('ABSPATH')) {
                                class="regular-text" 
                                placeholder="username/repo-name" />
                         <p class="description">
-                            שם ה-repository ב-GitHub (לעדכון אוטומטי)
+                            שם ה-repository ב-GitHub (לעדכון אוטומטי)<br>
+                            <strong>פורמט:</strong> <code>username/repo-name</code> (לדוגמה: <code>opkl10/summerized</code>)<br>
+                            <strong>חשוב:</strong> ודא שה-repository קיים ויש בו Release עם קובץ ZIP
+                        </p>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row">
+                        <label for="claude_github_token">GitHub Token (אופציונלי)</label>
+                    </th>
+                    <td>
+                        <input type="password" 
+                               id="claude_github_token" 
+                               name="claude_github_token" 
+                               value="<?php echo esc_attr(get_option('claude_github_token', '')); ?>" 
+                               class="regular-text" 
+                               placeholder="ghp_xxxxxxxxxxxx" />
+                        <p class="description">
+                            Personal Access Token מ-GitHub (אופציונלי)<br>
+                            <strong>למה זה עוזר:</strong> מגדיל את ה-rate limit מ-60 ל-5,000 בקשות לשעה<br>
+                            <strong>איך ליצור:</strong> <a href="https://github.com/settings/tokens" target="_blank">GitHub Settings → Developer settings → Personal access tokens</a><br>
+                            <strong>Scopes נדרשים:</strong> רק <code>public_repo</code> (או <code>repo</code> אם ה-repository פרטי)
                         </p>
                     </td>
                 </tr>
@@ -335,6 +378,22 @@ if (!defined('ABSPATH')) {
                             </button>
                         <?php else: ?>
                             <span style="color: #666;">אין עדכונים זמינים</span>
+                            <?php 
+                            $last_check_result = get_option('claude_last_check_result', array());
+                            if (!empty($last_check_result) && isset($last_check_result['latest_version'])): 
+                            ?>
+                                <br>
+                                <small style="color: #999;">
+                                    גרסה אחרונה ב-GitHub: <?php echo esc_html($last_check_result['latest_version']); ?>
+                                    <?php if (isset($last_check_result['version_comparison'])): ?>
+                                        <?php if ($last_check_result['version_comparison'] === 'same'): ?>
+                                            (זהה לגרסה הנוכחית)
+                                        <?php elseif ($last_check_result['version_comparison'] === 'older'): ?>
+                                            (ישנה יותר מהגרסה הנוכחית)
+                                        <?php endif; ?>
+                                    <?php endif; ?>
+                                </small>
+                            <?php endif; ?>
                         <?php endif; ?>
                     </td>
                 </tr>
@@ -348,6 +407,33 @@ if (!defined('ABSPATH')) {
                         </button>
                     </td>
                 </tr>
+                <?php
+                $update_error = get_option('claude_update_error', '');
+                $last_check_result = get_option('claude_last_check_result', array());
+                ?>
+                <?php if ($update_error): ?>
+                <tr>
+                    <th>שגיאה</th>
+                    <td>
+                        <span style="color: #dc3232;">⚠️ <?php echo esc_html($update_error); ?></span>
+                        <p class="description">
+                            ודא ש-GitHub Repository מוגדר נכון (format: username/repo-name)
+                        </p>
+                    </td>
+                </tr>
+                <?php endif; ?>
+                <?php if (!empty($last_check_result)): ?>
+                <tr>
+                    <th>פרטי בדיקה אחרונה</th>
+                    <td>
+                        <p class="description">
+                            גרסה נוכחית: <strong><?php echo esc_html($last_check_result['current_version'] ?? CLAUDE_SUMMARIZER_VERSION); ?></strong><br>
+                            גרסה אחרונה ב-GitHub: <strong><?php echo esc_html($last_check_result['latest_version'] ?? 'לא ידוע'); ?></strong><br>
+                            זמן בדיקה: <?php echo esc_html($last_check_result['check_time'] ?? 'לא ידוע'); ?>
+                        </p>
+                    </td>
+                </tr>
+                <?php endif; ?>
             </table>
         </div>
         
@@ -389,14 +475,45 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 if (response.success) {
-                    alert('בדיקה הושלמה. רענן את הדף לראות תוצאות.');
+                    var message = response.data.message || 'בדיקה הושלמה';
+                    var details = '';
+                    
+                    if (response.data.update_available) {
+                        message = '✓ ' + message + '\n\nגרסה חדשה: ' + response.data.update_version + '\nגרסה נוכחית: ' + response.data.current_version + '\n\nרענן את הדף כדי להתקין את העדכון.';
+                    } else {
+                        if (response.data.latest_version) {
+                            details = '\n\nגרסה אחרונה ב-GitHub: ' + response.data.latest_version;
+                            details += '\nגרסה נוכחית: ' + response.data.current_version;
+                            
+                            if (response.data.version_comparison === 'same') {
+                                details += '\n\nהגרסה הנוכחית זהה לגרסה ב-GitHub.';
+                            } else if (response.data.version_comparison === 'older') {
+                                details += '\n\nהגרסה הנוכחית חדשה יותר מהגרסה ב-GitHub.';
+                            } else if (response.data.error) {
+                                details += '\n\nשגיאה: ' + response.data.error;
+                            }
+                        }
+                        
+                        if (response.data.error) {
+                            message = '⚠️ ' + message + details;
+                        } else {
+                            message = '✓ ' + message + details;
+                        }
+                    }
+                    alert(message);
                     location.reload();
                 } else {
-                    alert('שגיאה: ' + (response.data.message || 'שגיאה לא ידועה'));
+                    var errorMsg = 'שגיאה: ' + (response.data.message || 'שגיאה לא ידועה');
+                    if (response.data.details && response.data.details.latest_version) {
+                        errorMsg += '\n\nגרסה אחרונה ב-GitHub: ' + response.data.details.latest_version;
+                        errorMsg += '\nגרסה נוכחית: ' + response.data.details.current_version;
+                    }
+                    alert(errorMsg);
+                    $button.prop('disabled', false).text(originalText);
                 }
             },
             error: function() {
-                alert('שגיאה בבדיקת עדכונים');
+                alert('שגיאה בבדיקת עדכונים. ודא שיש חיבור לאינטרנט.');
             },
             complete: function() {
                 $button.prop('disabled', false).text(originalText);
@@ -412,29 +529,64 @@ jQuery(document).ready(function($) {
         
         var $button = $(this);
         var originalText = $button.text();
+        var $status = $('<div>').css({
+            'margin-top': '10px',
+            'padding': '10px',
+            'background': '#f0f0f0',
+            'border-radius': '4px',
+            'min-height': '40px'
+        });
+        $button.after($status);
         
         $button.prop('disabled', true).text('מתקין...');
+        $status.html('📥 מוריד את העדכון...');
+        
+        var startTime = Date.now();
+        var progressInterval = setInterval(function() {
+            var elapsed = Math.floor((Date.now() - startTime) / 1000);
+            if (elapsed > 10) {
+                $status.html('📥 מוריד את העדכון... (' + elapsed + ' שניות)');
+            }
+        }, 1000);
         
         $.ajax({
             url: ajaxurl,
             type: 'POST',
+            timeout: 300000, // 5 minutes timeout
             data: {
                 action: 'claude_install_update',
                 nonce: '<?php echo wp_create_nonce('claude_install_update'); ?>'
             },
             success: function(response) {
+                clearInterval(progressInterval);
                 if (response.success) {
-                    alert('העדכון הותקן בהצלחה! הדף ירענן בעוד 3 שניות...');
+                    $status.html('✅ ' + (response.data.message || 'העדכון הותקן בהצלחה!'));
+                    $status.css('background', '#d4edda').css('color', '#155724');
+                    $button.text('✅ הותקן!');
                     setTimeout(function() {
                         location.reload();
-                    }, 3000);
+                    }, 2000);
                 } else {
-                    alert('שגיאה: ' + (response.data.message || 'שגיאה לא ידועה'));
+                    var errorMsg = response.data && response.data.message ? response.data.message : 'שגיאה לא ידועה';
+                    $status.html('❌ שגיאה: ' + errorMsg);
+                    $status.css('background', '#f8d7da').css('color', '#721c24');
                     $button.prop('disabled', false).text(originalText);
                 }
             },
-            error: function() {
-                alert('שגיאה בהתקנת עדכון');
+            error: function(xhr, status, error) {
+                clearInterval(progressInterval);
+                var errorMsg = 'שגיאה בהתקנת עדכון';
+                if (status === 'timeout') {
+                    errorMsg = 'התהליך לקח יותר מדי זמן (5 דקות). נסה שוב או עדכן ידנית דרך Plugins → Add New → Upload Plugin.';
+                } else if (xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) {
+                    errorMsg = xhr.responseJSON.data.message;
+                } else if (xhr.status === 0) {
+                    errorMsg = 'אין חיבור לשרת. בדוק את החיבור לאינטרנט.';
+                } else if (xhr.status >= 500) {
+                    errorMsg = 'שגיאת שרת. בדוק את ה-logs של WordPress.';
+                }
+                $status.html('❌ ' + errorMsg + '<br><small>אם הבעיה נמשכת, עדכן ידנית דרך Plugins → Add New → Upload Plugin</small>');
+                $status.css('background', '#f8d7da').css('color', '#721c24');
                 $button.prop('disabled', false).text(originalText);
             }
         });

@@ -6,7 +6,7 @@
     'use strict';
     
     $(document).ready(function() {
-        // Initialize color picker
+        // Initialize color picker for button
         if ($.fn.wpColorPicker) {
             $('#claude_button_color').wpColorPicker({
                 change: function(event, ui) {
@@ -19,6 +19,21 @@
                 var color = $(this).val();
                 if (/^#[0-9A-F]{6}$/i.test(color)) {
                     $('#claude_button_color').wpColorPicker('color', color);
+                }
+            });
+            
+            // Initialize color picker for panel
+            $('#claude_panel_color').wpColorPicker({
+                change: function(event, ui) {
+                    $('#claude_panel_color_text').val(ui.color.toString());
+                }
+            });
+            
+            // Sync text input with panel color picker
+            $('#claude_panel_color_text').on('input', function() {
+                var color = $(this).val();
+                if (/^#[0-9A-F]{6}$/i.test(color)) {
+                    $('#claude_panel_color').wpColorPicker('color', color);
                 }
             });
         }

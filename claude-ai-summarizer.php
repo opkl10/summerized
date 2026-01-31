@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 1.2.0
+ * Version: 1.3.2
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '1.2.0');
+define('CLAUDE_SUMMARIZER_VERSION', '1.3.2');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -145,6 +145,11 @@ class Claude_AI_Summarizer {
             'sanitize_callback' => 'sanitize_text_field',
             'default' => '1'
         ));
+        register_setting('claude_summarizer_settings', 'claude_panel_color', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_hex_color',
+            'default' => '#667eea'
+        ));
         register_setting('claude_summarizer_settings', 'claude_button_color', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_hex_color',
@@ -177,6 +182,11 @@ class Claude_AI_Summarizer {
             'default' => '0'
         ));
         register_setting('claude_summarizer_settings', 'claude_webhook_secret', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => ''
+        ));
+        register_setting('claude_summarizer_settings', 'claude_github_token', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
             'default' => ''
@@ -263,9 +273,11 @@ class Claude_AI_Summarizer {
         );
         
         $button_color = get_option('claude_button_color', '#667eea');
+        $panel_color = get_option('claude_panel_color', '#667eea');
         $button_icon = get_option('claude_button_icon', '');
         $button_text = get_option('claude_button_text', 'סכם עם AI');
         $show_icon = get_option('claude_show_icon', '1');
+        $summary_length = get_option('claude_summary_length', 'medium');
         
         wp_localize_script('claude-frontend-script', 'claudeFrontend', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -275,8 +287,10 @@ class Claude_AI_Summarizer {
             'loadingText' => __('Summarizing...', 'claude-ai-summarizer'),
             'position' => get_option('claude_button_position', 'bottom-left'),
             'buttonColor' => $button_color,
+            'panelColor' => $panel_color,
             'buttonIcon' => $button_icon,
             'showIcon' => $show_icon === '1',
+            'summaryLength' => $summary_length,
             'i18n' => array(
                 'error' => __('Error occurred. Please try again.', 'claude-ai-summarizer'),
                 'copied' => __('Copied!', 'claude-ai-summarizer'),
@@ -285,13 +299,23 @@ class Claude_AI_Summarizer {
             )
         ));
         
-        // Add inline CSS for button color (will be overridden by JS if needed)
+        // Add inline CSS for button and panel colors
+        $custom_css = "";
         if ($button_color) {
-            $custom_css = "
+            $custom_css .= "
                 .claude-btn {
                     background: {$button_color} !important;
                 }
             ";
+        }
+        if ($panel_color) {
+            $custom_css .= "
+                .claude-panel-header {
+                    background: linear-gradient(135deg, {$panel_color} 0%, " . $this->adjust_brightness($panel_color, -30) . " 100%) !important;
+                }
+            ";
+        }
+        if ($custom_css) {
             wp_add_inline_style('claude-frontend-style', $custom_css);
         }
     }
@@ -498,7 +522,7 @@ class Claude_AI_Summarizer {
      */
     private function summarize_with_claude($text, $api_key, $model, $length) {
         $length_instructions = array(
-            'short' => 'סכם בקצרה ב-2-3 משפטים',
+            'short' => 'סכם בקצרה ב-2-3 נקודות עיקריות. הצג כל נקודה בשורה נפרדת עם מקף (-) או בולט. כל נקודה צריכה להיות משפט קצר אחד.',
             'medium' => 'סכם בפסקה אחת',
             'long' => 'סכם בפירוט במספר פסקאות'
         );
@@ -665,6 +689,9 @@ class Claude_AI_Summarizer {
         }
         if (isset($_POST['claude_webhook_secret'])) {
             update_option('claude_webhook_secret', sanitize_text_field($_POST['claude_webhook_secret']));
+        }
+        if (isset($_POST['claude_github_token'])) {
+            update_option('claude_github_token', sanitize_text_field($_POST['claude_github_token']));
         }
         if (isset($_POST['claude_show_icon'])) {
             update_option('claude_show_icon', '1');
@@ -845,14 +872,36 @@ class Claude_AI_Summarizer {
      * Get release download URL
      */
     private function get_release_download_url($release) {
-        if (isset($release['assets']) && is_array($release['assets'])) {
-            foreach ($release['assets'] as $asset) {
-                if (strpos($asset['content_type'], 'zip') !== false || 
-                    strpos($asset['name'], '.zip') !== false) {
+        if (!isset($release['assets']) || !is_array($release['assets']) || empty($release['assets'])) {
+            // Log for debugging
+            error_log('Claude AI Summarizer: No assets found in release. Release tag: ' . (isset($release['tag_name']) ? $release['tag_name'] : 'unknown'));
+            return '';
+        }
+        
+        // First, try to find a ZIP file with "claude" in the name
+        foreach ($release['assets'] as $asset) {
+            if (isset($asset['browser_download_url']) && isset($asset['name'])) {
+                $name = strtolower($asset['name']);
+                if (strpos($name, '.zip') !== false && 
+                    (strpos($name, 'claude') !== false || strpos($name, 'summarizer') !== false)) {
                     return $asset['browser_download_url'];
                 }
             }
         }
+        
+        // If no specific match, return first ZIP file
+        foreach ($release['assets'] as $asset) {
+            if (isset($asset['browser_download_url'])) {
+                $content_type = isset($asset['content_type']) ? strtolower($asset['content_type']) : '';
+                $name = isset($asset['name']) ? strtolower($asset['name']) : '';
+                if (strpos($content_type, 'zip') !== false || strpos($name, '.zip') !== false) {
+                    return $asset['browser_download_url'];
+                }
+            }
+        }
+        
+        // Log for debugging
+        error_log('Claude AI Summarizer: No ZIP file found in release assets. Available assets: ' . print_r(array_map(function($a) { return isset($a['name']) ? $a['name'] : 'unknown'; }, $release['assets']), true));
         return '';
     }
     
@@ -885,30 +934,102 @@ class Claude_AI_Summarizer {
     private function check_and_update_from_github() {
         $github_repo = get_option('claude_github_repo', '');
         if (!$github_repo) {
+            update_option('claude_update_error', __('GitHub Repository not configured', 'claude-ai-summarizer'));
             return;
         }
         
         // Parse repo name (username/repo)
         $repo_parts = explode('/', $github_repo);
         if (count($repo_parts) !== 2) {
+            update_option('claude_update_error', __('Invalid repository format. Use: username/repo-name', 'claude-ai-summarizer'));
             return;
         }
         
-        $username = $repo_parts[0];
-        $repo = $repo_parts[1];
+        $username = trim($repo_parts[0]);
+        $repo = trim($repo_parts[1]);
         
         // Check GitHub API for latest release
         $url = sprintf('https://api.github.com/repos/%s/%s/releases/latest', $username, $repo);
         
+        // Prepare headers
+        $headers = array(
+            'Accept' => 'application/vnd.github.v3+json',
+            'User-Agent' => 'WordPress/Claude-AI-Summarizer'
+        );
+        
+        // Add GitHub token if available (for higher rate limit)
+        $github_token = get_option('claude_github_token', '');
+        if (!empty($github_token)) {
+            $headers['Authorization'] = 'token ' . $github_token;
+        }
+        
         $response = wp_remote_get($url, array(
-            'timeout' => 10,
-            'headers' => array(
-                'Accept' => 'application/vnd.github.v3+json',
-                'User-Agent' => 'WordPress/Claude-AI-Summarizer'
-            )
+            'timeout' => 15,
+            'headers' => $headers
         ));
         
         if (is_wp_error($response)) {
+            $error_message = $response->get_error_message();
+            update_option('claude_update_error', sprintf(__('Error connecting to GitHub: %s', 'claude-ai-summarizer'), $error_message));
+            return;
+        }
+        
+        $response_code = wp_remote_retrieve_response_code($response);
+        if ($response_code !== 200) {
+            $response_body = wp_remote_retrieve_body($response);
+            $response_data = json_decode($response_body, true);
+            $api_message = isset($response_data['message']) ? $response_data['message'] : '';
+            
+            $error_message = sprintf(__('GitHub API returned error code: %d', 'claude-ai-summarizer'), $response_code);
+            if ($response_code === 404) {
+                // Check if it's repository not found or no releases
+                if (strpos($api_message, 'Not Found') !== false) {
+                    // First check if repository exists
+                    $repo_check_url = sprintf('https://api.github.com/repos/%s/%s', $username, $repo);
+                    $repo_check_response = wp_remote_get($repo_check_url, array(
+                        'timeout' => 10,
+                        'headers' => $headers
+                    ));
+                    
+                    $repo_check_code = wp_remote_retrieve_response_code($repo_check_response);
+                    if ($repo_check_code === 200) {
+                        // Repository exists but no releases
+                        $error_message = sprintf(
+                            __('Repository %s/%s exists but has no releases. Create a release on GitHub first.', 'claude-ai-summarizer'),
+                            $username,
+                            $repo
+                        );
+                    } else {
+                        // Repository doesn't exist
+                        $error_message = sprintf(
+                            __('Repository not found: %s/%s. Check the repository name in settings. Make sure it exists and is public.', 'claude-ai-summarizer'),
+                            $username,
+                            $repo
+                        );
+                    }
+                } else {
+                    $error_message = sprintf(
+                        __('No releases found in repository %s/%s. Create a release on GitHub first.', 'claude-ai-summarizer'),
+                        $username,
+                        $repo
+                    );
+                }
+            } elseif ($response_code === 403) {
+                // Check rate limit headers
+                $rate_limit_remaining = wp_remote_retrieve_header($response, 'x-ratelimit-remaining');
+                $rate_limit_reset = wp_remote_retrieve_header($response, 'x-ratelimit-reset');
+                
+                if ($rate_limit_remaining === '0' && $rate_limit_reset) {
+                    $reset_time = date_i18n(get_option('date_format') . ' ' . get_option('time_format'), $rate_limit_reset);
+                    $error_message = sprintf(
+                        __('GitHub API rate limit exceeded. Limit resets at %s. Add a GitHub Personal Access Token in settings to increase the limit.', 'claude-ai-summarizer'),
+                        $reset_time
+                    );
+                } else {
+                    $error_message = __('GitHub API rate limit exceeded or access denied. Add a GitHub Personal Access Token in settings to increase the limit.', 'claude-ai-summarizer');
+                }
+            }
+            update_option('claude_update_error', $error_message);
             return;
         }
         
@@ -916,17 +1037,43 @@ class Claude_AI_Summarizer {
         $data = json_decode($body, true);
         
         if (!isset($data['tag_name'])) {
+            update_option('claude_update_error', __('No releases found in repository', 'claude-ai-summarizer'));
+            update_option('claude_update_available', '0');
             return;
         }
+        
+        // Clear any previous errors
+        delete_option('claude_update_error');
         
         $latest_version = ltrim($data['tag_name'], 'v');
         $current_version = CLAUDE_SUMMARIZER_VERSION;
         
-        update_option('claude_last_update_check', time());
+        // Normalize versions (remove any non-numeric characters except dots)
+        $latest_version_clean = preg_replace('/[^0-9.]/', '', $latest_version);
+        $current_version_clean = preg_replace('/[^0-9.]/', '', $current_version);
         
-        if (version_compare($latest_version, $current_version, '>')) {
+        update_option('claude_last_update_check', time());
+        update_option('claude_last_check_result', array(
+            'latest_version' => $latest_version,
+            'latest_version_clean' => $latest_version_clean,
+            'current_version' => $current_version,
+            'current_version_clean' => $current_version_clean,
+            'check_time' => current_time('mysql'),
+            'version_comparison' => version_compare($latest_version_clean, $current_version_clean, '>') ? 'newer' : (version_compare($latest_version_clean, $current_version_clean, '<') ? 'older' : 'same')
+        ));
+        
+        // Compare versions
+        $version_comparison = version_compare($latest_version_clean, $current_version_clean);
+        
+        if ($version_comparison > 0) {
             // New version available
             $download_url = $this->get_release_download_url($data);
+            
+            if (empty($download_url)) {
+                update_option('claude_update_error', __('Release found but no ZIP file available. Make sure the release includes a ZIP file.', 'claude-ai-summarizer'));
+                update_option('claude_update_available', '0');
+                return;
+            }
             
             update_option('claude_update_available', '1');
             update_option('claude_update_version', $latest_version);
@@ -937,8 +1084,18 @@ class Claude_AI_Summarizer {
             if ($auto_install === '1' && !empty($download_url)) {
                 $this->install_update($download_url, $latest_version);
             }
-        } else {
+        } elseif ($version_comparison === 0) {
+            // Same version
             update_option('claude_update_available', '0');
+            delete_option('claude_update_error');
+        } else {
+            // Current version is newer (shouldn't happen, but handle it)
+            update_option('claude_update_available', '0');
+            update_option('claude_update_error', sprintf(
+                __('Current version (%s) is newer than GitHub release (%s).', 'claude-ai-summarizer'),
+                $current_version,
+                $latest_version
+            ));
         }
     }
     
@@ -951,42 +1108,176 @@ class Claude_AI_Summarizer {
         }
         
         require_once ABSPATH . 'wp-admin/includes/file.php';
-        require_once ABSPATH . 'wp-admin/includes/plugin-install.php';
-        require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
         require_once ABSPATH . 'wp-admin/includes/plugin.php';
         
+        // Get plugin file path
+        $plugin_file = plugin_basename(__FILE__);
+        $plugin_dir = dirname($plugin_file);
+        $plugin_path = WP_PLUGIN_DIR . '/' . $plugin_dir;
+        
         // Download the update
-        $temp_file = download_url($download_url);
+        $temp_file = download_url($download_url, 300);
         
         if (is_wp_error($temp_file)) {
+            error_log('Claude AI Summarizer: Failed to download update. Error: ' . $temp_file->get_error_message());
             return false;
         }
         
-        // Create upgrader
-        $upgrader = new Plugin_Upgrader();
+        // Create temporary extraction directory
+        $temp_dir = get_temp_dir();
+        $extract_to = $temp_dir . 'claude-update-' . uniqid();
         
-        // Install the update
-        $result = $upgrader->install($temp_file, array(
-            'clear_destination' => true,
-            'clear_working' => true
-        ));
-        
-        // Clean up temp file
-        @unlink($temp_file);
-        
-        if ($result) {
-            update_option('claude_update_available', '0');
-            update_option('claude_last_update_version', $version);
-            
-            // Activate plugin if needed
-            if (!is_plugin_active(plugin_basename(__FILE__))) {
-                activate_plugin(plugin_basename(__FILE__));
-            }
-            
-            return true;
+        // Extract ZIP file
+        if (!class_exists('ZipArchive')) {
+            error_log('Claude AI Summarizer: ZipArchive class not available');
+            @unlink($temp_file);
+            return false;
         }
         
-        return false;
+        $zip = new ZipArchive();
+        $zip_result = $zip->open($temp_file);
+        
+        if ($zip_result !== true) {
+            error_log('Claude AI Summarizer: Failed to open ZIP file. Error code: ' . $zip_result);
+            @unlink($temp_file);
+            return false;
+        }
+        
+        // Extract to temporary directory
+        if (!$zip->extractTo($extract_to)) {
+            error_log('Claude AI Summarizer: Failed to extract ZIP file');
+            $zip->close();
+            @unlink($temp_file);
+            return false;
+        }
+        
+        $zip->close();
+        
+        // Find the plugin directory in extracted files
+        $extracted_plugin_dir = '';
+        $files = scandir($extract_to);
+        
+        foreach ($files as $file) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            
+            $full_path = $extract_to . '/' . $file;
+            if (is_dir($full_path) && $file === $plugin_dir) {
+                $extracted_plugin_dir = $full_path;
+                break;
+            } elseif (is_dir($full_path)) {
+                // Check if plugin file is inside this directory
+                if (file_exists($full_path . '/' . basename($plugin_file))) {
+                    $extracted_plugin_dir = $full_path;
+                    break;
+                }
+            }
+        }
+        
+        // If not found, check if files are directly in extract_to
+        if (empty($extracted_plugin_dir) && file_exists($extract_to . '/' . basename($plugin_file))) {
+            $extracted_plugin_dir = $extract_to;
+        }
+        
+        if (empty($extracted_plugin_dir)) {
+            error_log('Claude AI Summarizer: Plugin directory not found in extracted files');
+            $this->delete_directory($extract_to);
+            @unlink($temp_file);
+            return false;
+        }
+        
+        // Copy files from extracted directory to plugin directory
+        $this->copy_directory($extracted_plugin_dir, $plugin_path);
+        
+        // Clean up
+        $this->delete_directory($extract_to);
+        @unlink($temp_file);
+        
+        // Verify plugin file exists
+        if (!file_exists(WP_PLUGIN_DIR . '/' . $plugin_file)) {
+            error_log('Claude AI Summarizer: Plugin file not found after upgrade');
+            return false;
+        }
+        
+        // Verify version was updated
+        $plugin_data = get_file_data(WP_PLUGIN_DIR . '/' . $plugin_file, array('Version' => 'Version'), 'plugin');
+        $new_version = !empty($plugin_data['Version']) ? $plugin_data['Version'] : '';
+        
+        // Mark as updated
+        update_option('claude_update_available', '0');
+        update_option('claude_last_update_version', $version);
+        
+        // Activate plugin if needed
+        if (!is_plugin_active($plugin_file)) {
+            activate_plugin($plugin_file);
+        }
+        
+        // Clear any caches
+        wp_cache_flush();
+        
+        // Log success
+        if (!empty($new_version)) {
+            error_log('Claude AI Summarizer: Successfully upgraded to version ' . $new_version);
+        } else {
+            error_log('Claude AI Summarizer: Upgrade completed (version verification skipped)');
+        }
+        
+        return true;
+    }
+    
+    /**
+     * Copy directory recursively
+     */
+    private function copy_directory($source, $destination) {
+        if (!is_dir($destination)) {
+            wp_mkdir_p($destination);
+        }
+        
+        $dir = opendir($source);
+        if (!$dir) {
+            return false;
+        }
+        
+        while (($file = readdir($dir)) !== false) {
+            if ($file === '.' || $file === '..') {
+                continue;
+            }
+            
+            $source_file = $source . '/' . $file;
+            $dest_file = $destination . '/' . $file;
+            
+            if (is_dir($source_file)) {
+                $this->copy_directory($source_file, $dest_file);
+            } else {
+                copy($source_file, $dest_file);
+            }
+        }
+        
+        closedir($dir);
+        return true;
+    }
+    
+    /**
+     * Delete directory recursively
+     */
+    private function delete_directory($dir) {
+        if (!is_dir($dir)) {
+            return false;
+        }
+        
+        $files = array_diff(scandir($dir), array('.', '..'));
+        
+        foreach ($files as $file) {
+            $path = $dir . '/' . $file;
+            if (is_dir($path)) {
+                $this->delete_directory($path);
+            } else {
+                @unlink($path);
+            }
+        }
+        
+        return @rmdir($dir);
     }
     
     /**
@@ -1000,9 +1291,65 @@ class Claude_AI_Summarizer {
             return;
         }
         
+        // Force check (ignore time limit)
+        $github_repo = get_option('claude_github_repo', '');
+        if (!$github_repo) {
+            wp_send_json_error(array('message' => __('GitHub Repository not configured', 'claude-ai-summarizer')));
+            return;
+        }
+        
+        // Clear last check time to force immediate check
+        delete_option('claude_last_update_check');
+        
+        // Perform check
         $this->check_and_update_from_github();
         
-        wp_send_json_success(array('message' => __('Update check completed', 'claude-ai-summarizer')));
+        // Get results
+        $update_available = get_option('claude_update_available', '0');
+        $update_version = get_option('claude_update_version', '');
+        $update_error = get_option('claude_update_error', '');
+        $last_check_result = get_option('claude_last_check_result', array());
+        
+        $message = __('Update check completed', 'claude-ai-summarizer');
+        if ($update_error) {
+            $message .= ': ' . $update_error;
+        } elseif ($update_available === '1' && $update_version) {
+            $message = sprintf(__('New version %s available!', 'claude-ai-summarizer'), $update_version);
+        } elseif (!empty($last_check_result) && isset($last_check_result['latest_version'])) {
+            $current_version = CLAUDE_SUMMARIZER_VERSION;
+            $latest_version = $last_check_result['latest_version'];
+            
+            if (isset($last_check_result['version_comparison'])) {
+                if ($last_check_result['version_comparison'] === 'same') {
+                    $message = sprintf(__('Current version (%s) is the same as the latest release (%s)', 'claude-ai-summarizer'), $current_version, $latest_version);
+                } elseif ($last_check_result['version_comparison'] === 'older') {
+                    $message = sprintf(__('Current version (%s) is newer than GitHub release (%s)', 'claude-ai-summarizer'), $current_version, $latest_version);
+                } else {
+                    $message = sprintf(__('Latest GitHub release: %s (Current: %s)', 'claude-ai-summarizer'), $latest_version, $current_version);
+                }
+            } else {
+                $message = sprintf(__('Latest GitHub release: %s (Current: %s). No update needed.', 'claude-ai-summarizer'), $latest_version, $current_version);
+            }
+        } else {
+            $current_version = CLAUDE_SUMMARIZER_VERSION;
+            $latest_version = $last_check_result['latest_version'] ?? $current_version;
+            if (version_compare($latest_version, $current_version, '>')) {
+                $message = sprintf(__('Latest version is %s, but download URL not found', 'claude-ai-summarizer'), $latest_version);
+            } else {
+                $message = __('You are using the latest version', 'claude-ai-summarizer');
+            }
+        }
+        
+        wp_send_json_success(array(
+            'message' => $message,
+            'update_available' => $update_available === '1',
+            'update_version' => $update_version,
+            'current_version' => CLAUDE_SUMMARIZER_VERSION,
+            'latest_version' => !empty($last_check_result) && isset($last_check_result['latest_version']) ? $last_check_result['latest_version'] : '',
+            'version_comparison' => !empty($last_check_result) && isset($last_check_result['version_comparison']) ? $last_check_result['version_comparison'] : '',
+            'error' => $update_error,
+            'details' => $last_check_result
+        ));
     }
     
     /**
@@ -1024,12 +1371,47 @@ class Claude_AI_Summarizer {
             return;
         }
         
-        $result = $this->install_update($download_url, $version);
+        // Increase time limit for large downloads
+        @set_time_limit(300);
         
-        if ($result) {
-            wp_send_json_success(array('message' => __('Update installed successfully', 'claude-ai-summarizer')));
-        } else {
-            wp_send_json_error(array('message' => __('Failed to install update', 'claude-ai-summarizer')));
+        // Disable output buffering
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        
+        // Store error handler to catch any errors
+        $error_handler = function($errno, $errstr, $errfile, $errline) {
+            error_log("Claude AI Summarizer Update Error: [$errno] $errstr in $errfile on line $errline");
+        };
+        set_error_handler($error_handler);
+        
+        try {
+            $result = $this->install_update($download_url, $version);
+            
+            restore_error_handler();
+            
+            if ($result) {
+                wp_send_json_success(array(
+                    'message' => sprintf(__('Update installed successfully! Version %s is now active.', 'claude-ai-summarizer'), $version),
+                    'version' => $version
+                ));
+            } else {
+                $error_message = __('Failed to install update. Please check WordPress debug logs for details.', 'claude-ai-summarizer');
+                
+                // Check if there are specific error messages in logs
+                $last_error = error_get_last();
+                if ($last_error && (strpos($last_error['message'], 'Claude AI Summarizer') !== false || strpos($last_error['file'], 'claude-ai-summarizer') !== false)) {
+                    $error_message = __('Update failed: ', 'claude-ai-summarizer') . $last_error['message'];
+                }
+                
+                wp_send_json_error(array('message' => $error_message));
+            }
+        } catch (Exception $e) {
+            restore_error_handler();
+            error_log('Claude AI Summarizer: Exception during update: ' . $e->getMessage());
+            wp_send_json_error(array(
+                'message' => __('Update failed with exception: ', 'claude-ai-summarizer') . $e->getMessage()
+            ));
         }
     }
     
