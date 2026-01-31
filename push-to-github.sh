@@ -7,19 +7,27 @@ cd /Users/omerokon/Desktop/bf6/claude-ai-summarizer || exit 1
 echo "🔄 דוחף שינויים ל-GitHub..."
 echo ""
 
-# בדוק אם יש שינויים
-if [ -z "$(git status --porcelain)" ]; then
-    echo "⚠️  אין שינויים לדחיפה"
-    exit 0
+# בדוק אם יש שינויים לא staged
+if [ -n "$(git status --porcelain)" ]; then
+    echo "📝 נמצאו שינויים לא שמורים..."
+    read -p "האם להוסיף ולשמור אותם? (y/n) " -n 1 -r
+    echo
+    if [[ $REPLY =~ ^[Yy]$ ]]; then
+        git add .
+        read -p "הכנס הודעת commit (או Enter לברירת מחדל): " commit_message
+        if [ -z "$commit_message" ]; then
+            commit_message="Update plugin"
+        fi
+        git commit -m "$commit_message"
+    fi
 fi
 
-# הוסף קבצים
-echo "📝 מוסיף קבצים..."
-git add .
-
-# Commit
-echo "💾 יוצר commit..."
-git commit -m "Update to v1.2.0 - Add icon toggle and inline button positions"
+# בדוק אם יש commits שלא נדחפו
+unpushed=$(git log origin/main..HEAD --oneline 2>/dev/null | wc -l | tr -d ' ')
+if [ "$unpushed" -eq 0 ] && [ -z "$(git status --porcelain)" ]; then
+    echo "✅ הכל מעודכן - אין שינויים לדחיפה"
+    exit 0
+fi
 
 # Push
 echo "⬆️  מעלה ל-GitHub..."
