@@ -1,0 +1,74 @@
+/**
+ * Claude AI Summarizer - Admin Script
+ */
+
+(function($) {
+    'use strict';
+    
+    $(document).ready(function() {
+        // Initialize color picker
+        if ($.fn.wpColorPicker) {
+            $('#claude_button_color').wpColorPicker({
+                change: function(event, ui) {
+                    $('#claude_button_color_text').val(ui.color.toString());
+                }
+            });
+            
+            // Sync text input with color picker
+            $('#claude_button_color_text').on('input', function() {
+                var color = $(this).val();
+                if (/^#[0-9A-F]{6}$/i.test(color)) {
+                    $('#claude_button_color').wpColorPicker('color', color);
+                }
+            });
+        }
+        
+        // Remove icon
+        $('#claude-remove-icon').on('click', function() {
+            if (confirm('האם אתה בטוח שברצונך להסיר את האייקון?')) {
+                $.ajax({
+                    url: ajaxurl,
+                    type: 'POST',
+                    data: {
+                        action: 'claude_remove_icon',
+                        nonce: claudeAdmin.nonce
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            location.reload();
+                        }
+                    }
+                });
+            }
+        });
+        
+        // Preview button color
+        $('#claude_button_color').on('change', function() {
+            updateButtonPreview();
+        });
+        
+        $('#claude_button_text').on('input', function() {
+            updateButtonPreview();
+        });
+        
+        function updateButtonPreview() {
+            var color = $('#claude_button_color').val();
+            var text = $('#claude_button_text').val() || 'סכם עם AI';
+            var icon = $('#claude_icon_file').val() ? '📷' : '🤖';
+            
+            if (!$('#claude-button-preview').length) {
+                $('.claude-admin-section:first').after('<div class="claude-admin-section"><h2>תצוגה מקדימה</h2><div id="claude-button-preview" style="padding: 20px; text-align: center;"></div></div>');
+            }
+            
+            $('#claude-button-preview').html(
+                '<button class="claude-btn" style="background: ' + color + '; padding: 12px 24px; border: none; border-radius: 25px; color: white; font-size: 14px; font-weight: 600; cursor: pointer;">' +
+                '<span style="margin-left: 8px;">' + icon + '</span>' +
+                '<span>' + text + '</span>' +
+                '</button>'
+            );
+        }
+        
+        // Initial preview
+        updateButtonPreview();
+    });
+})(jQuery);
