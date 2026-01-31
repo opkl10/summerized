@@ -123,48 +123,69 @@
                             // Always format as bullet points for short summaries
                             var formattedSummary = '';
                             
-                            // Check if summary already has bullet indicators
-                            var hasBullets = summary.indexOf('-') !== -1 || 
-                                           summary.indexOf('•') !== -1 || 
-                                           summary.indexOf('*') !== -1 ||
-                                           summary.indexOf('\n-') !== -1 ||
-                                           summary.indexOf('\n•') !== -1;
+                            // First, try to split by newlines (if Claude created separate lines)
+                            var lines = summary.split(/\n+/).filter(function(l) { 
+                                return l.trim().length > 0; 
+                            });
                             
-                            if (hasBullets) {
-                                // Split by newlines and process each line
-                                var lines = summary.split(/\n/).filter(function(l) { 
-                                    return l.trim().length > 0 && l.trim() !== '-';
+                            // If we have multiple lines, use them
+                            if (lines.length > 1) {
+                                formattedSummary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
+                                lines.forEach(function(line) {
+                                    // Remove bullet markers if present
+                                    line = line.replace(/^[-•*]\s*/, '').trim();
+                                    if (line.length > 0) {
+                                        formattedSummary += '<li style="margin-bottom: 12px; padding-right: 20px; position: relative;">' + 
+                                                          '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold; top: 2px;">•</span>' + 
+                                                          '<span style="display: block; padding-right: 15px;">' + line + '</span>' + 
+                                                          '</li>';
+                                    }
                                 });
+                                formattedSummary += '</ul>';
+                            } else {
+                                // Single line or paragraph - split by sentences
+                                var text = lines.length > 0 ? lines[0] : summary;
                                 
-                                if (lines.length > 0) {
-                                    formattedSummary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
-                                    lines.forEach(function(line) {
-                                        // Remove bullet markers if present
-                                        line = line.replace(/^[-•*]\s*/, '').trim();
-                                        if (line.length > 0) {
-                                            formattedSummary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
-                                                              '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
-                                                              '<span style="display: block; padding-right: 15px;">' + line + '</span>' + 
-                                                              '</li>';
-                                        }
+                                // Remove any existing bullet markers
+                                text = text.replace(/^[-•*]\s*/, '').trim();
+                                
+                                // Split by sentence endings - more robust regex
+                                // Match sentence endings followed by space or end of string
+                                var sentenceRegex = /([^.!?]+[.!?]+(?:\s+|$))/g;
+                                var matches = text.match(sentenceRegex);
+                                
+                                var finalSentences = [];
+                                
+                                if (matches && matches.length > 0) {
+                                    // Use matched sentences
+                                    finalSentences = matches.map(function(s) {
+                                        return s.trim();
+                                    }).filter(function(s) {
+                                        return s.length > 0;
                                     });
-                                    formattedSummary += '</ul>';
+                                } else {
+                                    // Fallback: split by common sentence endings
+                                    finalSentences = text.split(/[.!?]+\s+/).map(function(s) {
+                                        s = s.trim();
+                                        if (s.length > 0 && !/[.!?]$/.test(s)) {
+                                            s += '.';
+                                        }
+                                        return s;
+                                    }).filter(function(s) {
+                                        return s.length > 0;
+                                    });
                                 }
-                            }
-                            
-                            // If no bullets found or formatting failed, split by sentences
-                            if (!formattedSummary) {
-                                var sentences = summary.split(/[.!?]\s+/).filter(function(s) { 
-                                    return s.trim().length > 0; 
-                                });
                                 
-                                if (sentences.length > 0) {
+                                // Limit to 3 sentences max
+                                finalSentences = finalSentences.slice(0, 3);
+                                
+                                if (finalSentences.length > 0) {
                                     formattedSummary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
-                                    sentences.forEach(function(sentence) {
+                                    finalSentences.forEach(function(sentence) {
                                         sentence = sentence.trim();
                                         if (sentence.length > 0) {
-                                            formattedSummary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
-                                                              '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
+                                            formattedSummary += '<li style="margin-bottom: 12px; padding-right: 20px; position: relative;">' + 
+                                                              '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold; top: 2px;">•</span>' + 
                                                               '<span style="display: block; padding-right: 15px;">' + sentence + '</span>' + 
                                                               '</li>';
                                         }
