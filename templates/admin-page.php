@@ -615,15 +615,33 @@ jQuery(document).ready(function($) {
             },
             success: function(response) {
                 clearInterval(progressInterval);
+                
+                // Check if response is valid
+                if (!response) {
+                    $status.html('❌ שגיאה: תגובה לא תקינה מהשרת');
+                    $status.css('background', '#f8d7da').css('color', '#721c24');
+                    $button.prop('disabled', false).text(originalText);
+                    return;
+                }
+                
                 if (response.success) {
-                    $status.html('✅ ' + (response.data.message || 'העדכון הותקן בהצלחה!'));
+                    var successMsg = 'העדכון הותקן בהצלחה!';
+                    if (response.data && response.data.message) {
+                        successMsg = response.data.message;
+                    }
+                    $status.html('✅ ' + successMsg);
                     $status.css('background', '#d4edda').css('color', '#155724');
                     $button.text('✅ הותקן!');
                     setTimeout(function() {
                         location.reload();
                     }, 2000);
                 } else {
-                    var errorMsg = response.data && response.data.message ? response.data.message : 'שגיאה לא ידועה';
+                    var errorMsg = 'שגיאה לא ידועה';
+                    if (response.data && response.data.message) {
+                        errorMsg = response.data.message;
+                    } else if (response.data) {
+                        errorMsg = JSON.stringify(response.data);
+                    }
                     $status.html('❌ שגיאה: ' + errorMsg);
                     $status.css('background', '#f8d7da').css('color', '#721c24');
                     $button.prop('disabled', false).text(originalText);
