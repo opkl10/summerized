@@ -27,6 +27,25 @@
     right: 20px;
 }
 
+/* Inline button styles (inside content) */
+.claude-summary-button-inline {
+    position: relative;
+    display: inline-block;
+    margin: 20px 0;
+    text-align: center;
+    width: 100%;
+}
+
+.claude-summary-button-inline.claude-position-before-content,
+.claude-summary-button-inline.claude-position-after-content {
+    margin: 30px 0;
+}
+
+.claude-summary-button-inline.claude-position-inside-content-top,
+.claude-summary-button-inline.claude-position-inside-content-bottom {
+    margin: 15px 0;
+}
+
 .claude-btn {
     display: flex;
     align-items: center;

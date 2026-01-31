@@ -7,8 +7,16 @@ if (!defined('ABSPATH')) {
 <div class="wrap claude-admin-wrap">
     <h1>🤖 Claude AI Summarizer</h1>
     
-    <form method="post" action="options.php">
-        <?php settings_fields('claude_summarizer_settings'); ?>
+    <?php
+    // Show success message
+    if (isset($_GET['settings-updated'])) {
+        echo '<div class="notice notice-success is-dismissible"><p>ההגדרות נשמרו בהצלחה!</p></div>';
+    }
+    ?>
+    
+    <form method="post" action="<?php echo esc_url(admin_url('admin-post.php')); ?>">
+        <input type="hidden" name="action" value="claude_save_settings">
+        <?php wp_nonce_field('claude_summarizer_settings-options'); ?>
         
         <div class="claude-admin-section">
             <h2>הגדרות API</h2>
@@ -97,19 +105,38 @@ if (!defined('ABSPATH')) {
                     </th>
                     <td>
                         <select id="claude_button_position" name="claude_button_position">
-                            <option value="bottom-left" <?php selected(get_option('claude_button_position', 'bottom-left'), 'bottom-left'); ?>>
-                                פינה שמאלית תחתונה
-                            </option>
-                            <option value="bottom-right" <?php selected(get_option('claude_button_position', 'bottom-left'), 'bottom-right'); ?>>
-                                פינה ימנית תחתונה
-                            </option>
-                            <option value="top-left" <?php selected(get_option('claude_button_position', 'bottom-left'), 'top-left'); ?>>
-                                פינה שמאלית עליונה
-                            </option>
-                            <option value="top-right" <?php selected(get_option('claude_button_position', 'bottom-left'), 'top-right'); ?>>
-                                פינה ימנית עליונה
-                            </option>
+                            <optgroup label="בקצוות המסך (Fixed)">
+                                <option value="bottom-left" <?php selected(get_option('claude_button_position', 'bottom-left'), 'bottom-left'); ?>>
+                                    פינה שמאלית תחתונה
+                                </option>
+                                <option value="bottom-right" <?php selected(get_option('claude_button_position', 'bottom-left'), 'bottom-right'); ?>>
+                                    פינה ימנית תחתונה
+                                </option>
+                                <option value="top-left" <?php selected(get_option('claude_button_position', 'bottom-left'), 'top-left'); ?>>
+                                    פינה שמאלית עליונה
+                                </option>
+                                <option value="top-right" <?php selected(get_option('claude_button_position', 'bottom-left'), 'top-right'); ?>>
+                                    פינה ימנית עליונה
+                                </option>
+                            </optgroup>
+                            <optgroup label="בתוך הפוסט">
+                                <option value="before-content" <?php selected(get_option('claude_button_position', 'bottom-left'), 'before-content'); ?>>
+                                    לפני התוכן
+                                </option>
+                                <option value="after-content" <?php selected(get_option('claude_button_position', 'bottom-left'), 'after-content'); ?>>
+                                    אחרי התוכן
+                                </option>
+                                <option value="inside-content-top" <?php selected(get_option('claude_button_position', 'bottom-left'), 'inside-content-top'); ?>>
+                                    בתחילת התוכן
+                                </option>
+                                <option value="inside-content-bottom" <?php selected(get_option('claude_button_position', 'bottom-left'), 'inside-content-bottom'); ?>>
+                                    בסוף התוכן
+                                </option>
+                            </optgroup>
                         </select>
+                        <p class="description">
+                            בחר היכן להציג את הכפתור. "בקצוות" = כפתור צף, "בתוך הפוסט" = כפתור בתוך התוכן
+                        </p>
                     </td>
                 </tr>
                 
@@ -151,6 +178,22 @@ if (!defined('ABSPATH')) {
                 </tr>
                 
                 <tr>
+                    <th scope="row">הצגת אייקון</th>
+                    <td>
+                        <label>
+                            <input type="checkbox" 
+                                   name="claude_show_icon" 
+                                   value="1" 
+                                   <?php checked(get_option('claude_show_icon', '1'), '1'); ?> />
+                            הצג אייקון בכפתור
+                        </label>
+                        <p class="description">
+                            סמן כדי להציג אייקון בכפתור (אם הועלה אייקון מותאם אישית)
+                        </p>
+                    </td>
+                </tr>
+                
+                <tr>
                     <th scope="row">
                         <label>אייקון כפתור</label>
                     </th>
@@ -170,33 +213,20 @@ if (!defined('ABSPATH')) {
                             </div>
                         <?php endif; ?>
                         
-                        <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" enctype="multipart/form-data" id="claude-icon-upload-form">
-                            <?php wp_nonce_field('claude_upload_icon'); ?>
-                            <input type="hidden" name="action" value="claude_upload_icon">
+                        <div id="claude-icon-upload-wrapper">
                             <input type="file" 
                                    name="claude_icon_file" 
                                    id="claude_icon_file" 
                                    accept="image/*" 
                                    style="margin-bottom: 10px;" />
-                            <button type="submit" class="button">
+                            <button type="button" class="button" id="claude-upload-icon-btn">
                                 העלה אייקון
                             </button>
+                            <div id="claude-icon-upload-message" style="margin-top: 10px;"></div>
                             <p class="description">
                                 העלה תמונה לאייקון (PNG, JPG, SVG, WebP). מומלץ: 32x32 עד 64x64 פיקסלים
                             </p>
-                        </form>
-                        
-                        <?php if (isset($_GET['icon_uploaded'])): ?>
-                            <div class="notice notice-success inline" style="margin-top: 10px;">
-                                <p>אייקון הועלה בהצלחה!</p>
-                            </div>
-                        <?php endif; ?>
-                        
-                        <?php if (isset($_GET['icon_upload_error'])): ?>
-                            <div class="notice notice-error inline" style="margin-top: 10px;">
-                                <p>שגיאה בהעלאת אייקון. ודא שזה קובץ תמונה תקין.</p>
-                            </div>
-                        <?php endif; ?>
+                        </div>
                     </td>
                 </tr>
             </table>

@@ -7,7 +7,16 @@
     
     $(document).ready(function() {
         const $button = $('#claude-summarize-btn');
-        const $panel = $('<div>').attr('id', 'claude-summary-panel').addClass('claude-summary-panel claude-position-' + claudeFrontend.position);
+        
+        // Determine panel position based on button position
+        let panelPosition = claudeFrontend.position;
+        const fixedPositions = ['bottom-left', 'bottom-right', 'top-left', 'top-right'];
+        if (!fixedPositions.includes(claudeFrontend.position)) {
+            // For inline positions, use bottom-right as default
+            panelPosition = 'bottom-right';
+        }
+        
+        const $panel = $('<div>').attr('id', 'claude-summary-panel').addClass('claude-summary-panel claude-position-' + panelPosition);
         
         if ($button.length === 0) {
             return;
@@ -24,9 +33,14 @@
             });
         }
         
-        // Apply custom icon if set
-        if (claudeFrontend.buttonIcon) {
-            $button.find('.claude-btn-icon').html('<img src="' + claudeFrontend.buttonIcon + '" alt="Icon" style="width: 18px; height: 18px; object-fit: contain;" />');
+        // Apply custom icon if set and show_icon is enabled
+        if (claudeFrontend.showIcon) {
+            if (claudeFrontend.buttonIcon) {
+                $button.find('.claude-btn-icon').html('<img src="' + claudeFrontend.buttonIcon + '" alt="Icon" style="width: 18px; height: 18px; object-fit: contain;" />');
+            }
+        } else {
+            // Hide icon if disabled
+            $button.find('.claude-btn-icon').hide();
         }
         
         // Apply custom text if set

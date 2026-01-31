@@ -42,6 +42,49 @@
             }
         });
         
+        // Upload icon via AJAX
+        $('#claude-upload-icon-btn').on('click', function() {
+            var fileInput = $('#claude_icon_file')[0];
+            if (!fileInput.files.length) {
+                alert('אנא בחר קובץ תמונה');
+                return;
+            }
+            
+            var formData = new FormData();
+            formData.append('action', 'claude_upload_icon_ajax');
+            formData.append('nonce', claudeAdmin.nonce);
+            formData.append('icon_file', fileInput.files[0]);
+            
+            var $btn = $(this);
+            var $message = $('#claude-icon-upload-message');
+            
+            $btn.prop('disabled', true).text('מעלה...');
+            $message.html('');
+            
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        $message.html('<div class="notice notice-success inline"><p>אייקון הועלה בהצלחה!</p></div>');
+                        setTimeout(function() {
+                            location.reload();
+                        }, 1000);
+                    } else {
+                        $message.html('<div class="notice notice-error inline"><p>' + (response.data.message || 'שגיאה בהעלאת אייקון') + '</p></div>');
+                        $btn.prop('disabled', false).text('העלה אייקון');
+                    }
+                },
+                error: function() {
+                    $message.html('<div class="notice notice-error inline"><p>שגיאה בהעלאת אייקון. ודא שזה קובץ תמונה תקין.</p></div>');
+                    $btn.prop('disabled', false).text('העלה אייקון');
+                }
+            });
+        });
+        
         // Preview button color
         $('#claude_button_color').on('change', function() {
             updateButtonPreview();

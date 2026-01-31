@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 1.1.0
+ * Version: 1.2.0
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '1.1.0');
+define('CLAUDE_SUMMARIZER_VERSION', '1.2.0');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -46,9 +46,15 @@ class Claude_AI_Summarizer {
         add_action('admin_init', array($this, 'register_settings'));
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_scripts'));
         
+        // Handle form submission via admin_post hook
+        add_action('admin_post_claude_save_settings', array($this, 'handle_settings_save'));
+        
         // Frontend hooks
         add_action('wp_enqueue_scripts', array($this, 'enqueue_frontend_scripts'));
         add_action('wp_footer', array($this, 'add_summary_button'));
+        
+        // Add button inside content for specific positions
+        add_filter('the_content', array($this, 'add_button_to_content'), 10, 1);
         
         // AJAX hooks
         add_action('wp_ajax_claude_summarize', array($this, 'ajax_summarize'));
@@ -56,6 +62,7 @@ class Claude_AI_Summarizer {
         add_action('wp_ajax_claude_check_update_manual', array($this, 'ajax_check_update_manual'));
         add_action('wp_ajax_claude_install_update', array($this, 'ajax_install_update'));
         add_action('wp_ajax_claude_remove_icon', array($this, 'ajax_remove_icon'));
+        add_action('wp_ajax_claude_upload_icon_ajax', array($this, 'ajax_upload_icon'));
         
         // Shortcode
         add_shortcode('claude_summary', array($this, 'summary_shortcode'));
@@ -63,8 +70,11 @@ class Claude_AI_Summarizer {
         // Gutenberg block
         add_action('init', array($this, 'register_gutenberg_block'));
         
-        // Auto-update from GitHub
-        add_action('init', array($this, 'check_for_updates'));
+        // Auto-update from GitHub - check on admin pages only (every 2 hours)
+        add_action('admin_init', array($this, 'check_for_updates'));
+        
+        // Also check when visiting the settings page
+        add_action('load-settings_page_claude-ai-summarizer', array($this, 'check_for_updates'));
         
         // Webhook endpoint for GitHub updates
         add_action('rest_api_init', array($this, 'register_webhook_endpoint'));
@@ -130,6 +140,11 @@ class Claude_AI_Summarizer {
             'sanitize_callback' => array($this, 'sanitize_button_position'),
             'default' => 'bottom-left'
         ));
+        register_setting('claude_summarizer_settings', 'claude_show_icon', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_text_field',
+            'default' => '1'
+        ));
         register_setting('claude_summarizer_settings', 'claude_button_color', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_hex_color',
@@ -146,8 +161,6 @@ class Claude_AI_Summarizer {
             'default' => 'סכם עם AI'
         ));
         
-        // Handle icon upload
-        add_action('admin_post_claude_upload_icon', array($this, 'handle_icon_upload'));
         register_setting('claude_summarizer_settings', 'claude_github_repo', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_text_field',
@@ -182,7 +195,10 @@ class Claude_AI_Summarizer {
      * Sanitize button position
      */
     public function sanitize_button_position($value) {
-        $allowed = array('bottom-left', 'bottom-right', 'top-left', 'top-right');
+        $allowed = array(
+            'bottom-left', 'bottom-right', 'top-left', 'top-right',
+            'before-content', 'after-content', 'inside-content-top', 'inside-content-bottom'
+        );
         return in_array($value, $allowed, true) ? $value : 'bottom-left';
     }
     
@@ -249,6 +265,7 @@ class Claude_AI_Summarizer {
         $button_color = get_option('claude_button_color', '#667eea');
         $button_icon = get_option('claude_button_icon', '');
         $button_text = get_option('claude_button_text', 'סכם עם AI');
+        $show_icon = get_option('claude_show_icon', '1');
         
         wp_localize_script('claude-frontend-script', 'claudeFrontend', array(
             'ajaxUrl' => admin_url('admin-ajax.php'),
@@ -259,6 +276,7 @@ class Claude_AI_Summarizer {
             'position' => get_option('claude_button_position', 'bottom-left'),
             'buttonColor' => $button_color,
             'buttonIcon' => $button_icon,
+            'showIcon' => $show_icon === '1',
             'i18n' => array(
                 'error' => __('Error occurred. Please try again.', 'claude-ai-summarizer'),
                 'copied' => __('Copied!', 'claude-ai-summarizer'),
@@ -279,7 +297,7 @@ class Claude_AI_Summarizer {
     }
     
     /**
-     * Add summary button to posts
+     * Add summary button to posts (for fixed positions)
      */
     public function add_summary_button() {
         if (!is_singular('post')) {
@@ -292,15 +310,85 @@ class Claude_AI_Summarizer {
         }
         
         $position = get_option('claude_button_position', 'bottom-left');
+        
+        // Only show in footer for fixed positions
+        $fixed_positions = array('bottom-left', 'bottom-right', 'top-left', 'top-right');
+        if (!in_array($position, $fixed_positions, true)) {
+            return;
+        }
+        
+        $this->render_button($position);
+    }
+    
+    /**
+     * Add button to content (for content positions)
+     */
+    public function add_button_to_content($content) {
+        if (!is_singular('post')) {
+            return $content;
+        }
+        
+        $auto_button = get_option('claude_auto_button', '1');
+        if ($auto_button !== '1') {
+            return $content;
+        }
+        
+        $position = get_option('claude_button_position', 'bottom-left');
+        
+        // Only add to content for specific positions
+        $content_positions = array('before-content', 'after-content', 'inside-content-top', 'inside-content-bottom');
+        if (!in_array($position, $content_positions, true)) {
+            return $content;
+        }
+        
+        ob_start();
+        $this->render_button($position, true);
+        $button_html = ob_get_clean();
+        
+        switch ($position) {
+            case 'before-content':
+                return $button_html . $content;
+            case 'after-content':
+                return $content . $button_html;
+            case 'inside-content-top':
+                // Add after first paragraph
+                $content_parts = preg_split('/(<\/p>)/', $content, 2, PREG_SPLIT_DELIM_CAPTURE);
+                if (count($content_parts) > 2) {
+                    return $content_parts[0] . $content_parts[1] . $button_html . $content_parts[2];
+                }
+                return $button_html . $content;
+            case 'inside-content-bottom':
+                // Add before last paragraph
+                $content_parts = preg_split('/(<p[^>]*>)/', $content, -1, PREG_SPLIT_DELIM_CAPTURE);
+                if (count($content_parts) > 2) {
+                    $last_p = array_pop($content_parts);
+                    $before_last_p = array_pop($content_parts);
+                    return implode('', $content_parts) . $button_html . $before_last_p . $last_p;
+                }
+                return $content . $button_html;
+            default:
+                return $content;
+        }
+    }
+    
+    /**
+     * Render button HTML
+     */
+    private function render_button($position, $inline = false) {
         $button_icon = get_option('claude_button_icon', '');
         $button_text = get_option('claude_button_text', 'סכם עם AI');
+        $show_icon = get_option('claude_show_icon', '1');
+        
+        $wrapper_class = $inline ? 'claude-summary-button-inline' : 'claude-summary-button';
         ?>
-        <div id="claude-summary-button" class="claude-summary-button claude-position-<?php echo esc_attr($position); ?>">
+        <div id="claude-summary-button" class="<?php echo esc_attr($wrapper_class); ?> claude-position-<?php echo esc_attr($position); ?>">
             <button id="claude-summarize-btn" class="claude-btn">
-                <?php if ($button_icon): ?>
-                    <span class="claude-btn-icon"><img src="<?php echo esc_url($button_icon); ?>" alt="Icon" style="width: 18px; height: 18px; object-fit: contain;" /></span>
-                <?php else: ?>
-                    <span class="claude-btn-icon">🤖</span>
+                <?php if ($show_icon === '1'): ?>
+                    <?php if ($button_icon): ?>
+                        <span class="claude-btn-icon"><img src="<?php echo esc_url($button_icon); ?>" alt="Icon" style="width: 18px; height: 18px; object-fit: contain;" /></span>
+                    <?php else: ?>
+                        <span class="claude-btn-icon">🤖</span>
+                    <?php endif; ?>
                 <?php endif; ?>
                 <span class="claude-btn-text"><?php echo esc_html($button_text); ?></span>
             </button>
@@ -517,6 +605,79 @@ class Claude_AI_Summarizer {
     }
     
     /**
+     * Handle settings save via admin_post hook
+     */
+    public function handle_settings_save() {
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_die(__('You do not have permission to access this page.', 'claude-ai-summarizer'));
+        }
+        
+        // Verify nonce
+        if (!isset($_POST['_wpnonce']) || !wp_verify_nonce($_POST['_wpnonce'], 'claude_summarizer_settings-options')) {
+            wp_die(__('Security check failed.', 'claude-ai-summarizer'));
+        }
+        
+        // Save all settings
+        if (isset($_POST['claude_api_key'])) {
+            update_option('claude_api_key', sanitize_text_field($_POST['claude_api_key']));
+        }
+        if (isset($_POST['claude_model'])) {
+            update_option('claude_model', sanitize_text_field($_POST['claude_model']));
+        }
+        if (isset($_POST['claude_summary_length'])) {
+            $length = sanitize_text_field($_POST['claude_summary_length']);
+            $allowed = array('short', 'medium', 'long');
+            update_option('claude_summary_length', in_array($length, $allowed) ? $length : 'medium');
+        }
+        if (isset($_POST['claude_auto_button'])) {
+            update_option('claude_auto_button', '1');
+        } else {
+            update_option('claude_auto_button', '0');
+        }
+        if (isset($_POST['claude_button_position'])) {
+            $position = sanitize_text_field($_POST['claude_button_position']);
+            $allowed = array(
+                'bottom-left', 'bottom-right', 'top-left', 'top-right',
+                'before-content', 'after-content', 'inside-content-top', 'inside-content-bottom'
+            );
+            update_option('claude_button_position', in_array($position, $allowed) ? $position : 'bottom-left');
+        }
+        if (isset($_POST['claude_button_color'])) {
+            $color = sanitize_text_field($_POST['claude_button_color']);
+            update_option('claude_button_color', preg_match('/^#[a-fA-F0-9]{6}$/', $color) ? $color : '#667eea');
+        }
+        if (isset($_POST['claude_button_text'])) {
+            update_option('claude_button_text', sanitize_text_field($_POST['claude_button_text']));
+        }
+        if (isset($_POST['claude_github_repo'])) {
+            update_option('claude_github_repo', sanitize_text_field($_POST['claude_github_repo']));
+        }
+        if (isset($_POST['claude_auto_update'])) {
+            update_option('claude_auto_update', '1');
+        } else {
+            update_option('claude_auto_update', '0');
+        }
+        if (isset($_POST['claude_auto_install'])) {
+            update_option('claude_auto_install', '1');
+        } else {
+            update_option('claude_auto_install', '0');
+        }
+        if (isset($_POST['claude_webhook_secret'])) {
+            update_option('claude_webhook_secret', sanitize_text_field($_POST['claude_webhook_secret']));
+        }
+        if (isset($_POST['claude_show_icon'])) {
+            update_option('claude_show_icon', '1');
+        } else {
+            update_option('claude_show_icon', '0');
+        }
+        
+        // Redirect back to settings page with success message
+        wp_safe_redirect(admin_url('options-general.php?page=claude-ai-summarizer&settings-updated=true'));
+        exit;
+    }
+    
+    /**
      * Render admin page
      */
     public function render_admin_page() {
@@ -709,9 +870,9 @@ class Claude_AI_Summarizer {
             return;
         }
         
-        // Check once per day (unless webhook triggered)
+        // Check once every 2 hours (unless webhook triggered)
         $last_check = get_option('claude_last_update_check', 0);
-        if ((time() - $last_check) < 3600) { // Check at most once per hour
+        if ((time() - $last_check) < 7200) { // Check at most once per 2 hours
             return;
         }
         
@@ -885,6 +1046,49 @@ class Claude_AI_Summarizer {
         
         delete_option('claude_button_icon');
         wp_send_json_success(array('message' => __('Icon removed', 'claude-ai-summarizer')));
+    }
+    
+    /**
+     * AJAX handler for uploading icon
+     */
+    public function ajax_upload_icon() {
+        check_ajax_referer('claude_admin_nonce', 'nonce');
+        
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => __('You do not have permission', 'claude-ai-summarizer')));
+            return;
+        }
+        
+        if (!function_exists('wp_handle_upload')) {
+            require_once(ABSPATH . 'wp-admin/includes/file.php');
+        }
+        
+        if (empty($_FILES['icon_file'])) {
+            wp_send_json_error(array('message' => __('No file uploaded', 'claude-ai-summarizer')));
+            return;
+        }
+        
+        $uploadedfile = $_FILES['icon_file'];
+        $upload_overrides = array(
+            'test_form' => false,
+            'mimes' => array(
+                'jpg|jpeg|jpe' => 'image/jpeg',
+                'gif' => 'image/gif',
+                'png' => 'image/png',
+                'svg' => 'image/svg+xml',
+                'webp' => 'image/webp'
+            )
+        );
+        
+        $movefile = wp_handle_upload($uploadedfile, $upload_overrides);
+        
+        if ($movefile && !isset($movefile['error'])) {
+            update_option('claude_button_icon', $movefile['url']);
+            wp_send_json_success(array('message' => __('Icon uploaded successfully', 'claude-ai-summarizer'), 'url' => $movefile['url']));
+        } else {
+            $error = isset($movefile['error']) ? $movefile['error'] : __('Unknown error', 'claude-ai-summarizer');
+            wp_send_json_error(array('message' => $error));
+        }
     }
 }
 
