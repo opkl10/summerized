@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 1.4.3
+ * Version: 1.4.5
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '1.4.3');
+define('CLAUDE_SUMMARIZER_VERSION', '1.4.5');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -522,7 +522,7 @@ class Claude_AI_Summarizer {
      */
     private function summarize_with_claude($text, $api_key, $model, $length) {
         $length_instructions = array(
-            'short' => 'סכם בקצרה ב-2-3 נקודות עיקריות. הצג כל נקודה בשורה נפרדת עם מקף (-) או בולט. כל נקודה צריכה להיות משפט קצר אחד.',
+            'short' => 'סכם בקצרה ב-2-3 נקודות עיקריות בלבד. חשוב מאוד: הצג כל נקודה בשורה נפרדת, כל שורה מתחילה עם מקף (-) או בולט (•). כל נקודה צריכה להיות משפט קצר אחד. דוגמה לפורמט:\n- נקודה ראשונה\n- נקודה שנייה\n- נקודה שלישית',
             'medium' => 'סכם בפסקה אחת',
             'long' => 'סכם בפירוט במספר פסקאות'
         );
@@ -558,9 +558,24 @@ class Claude_AI_Summarizer {
         $status_code = wp_remote_retrieve_response_code($response);
         
         if ($status_code !== 200) {
-            $error_message = isset($data['error']['message']) 
-                ? $data['error']['message'] 
-                : 'Unknown error from Claude API';
+            $error_message = 'Unknown error from Claude API';
+            
+            if (isset($data['error'])) {
+                if (isset($data['error']['message'])) {
+                    $error_message = $data['error']['message'];
+                } elseif (isset($data['error']['type'])) {
+                    $error_message = $data['error']['type'];
+                }
+            }
+            
+            // Add model info to error message if available
+            if ($model) {
+                $error_message = sprintf(__('Model: %s. Error: %s', 'claude-ai-summarizer'), $model, $error_message);
+            }
+            
+            // Log full error for debugging
+            error_log('Claude AI Summarizer API Error: ' . json_encode($data));
+            
             return new WP_Error('claude_api_error', $error_message);
         }
         

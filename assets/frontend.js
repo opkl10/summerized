@@ -117,42 +117,68 @@
                         var summary = response.data.summary;
                         
                         // Format summary based on length
-                        if (claudeFrontend.summaryLength === 'short') {
-                            // Convert to bullet points if not already formatted
-                            if (summary.indexOf('-') === -1 && summary.indexOf('•') === -1 && summary.indexOf('*') === -1) {
-                                // Split by sentences and create bullets
-                                var sentences = summary.split(/[.!?]\s+/).filter(function(s) { return s.trim().length > 0; });
-                                if (sentences.length > 0) {
-                                    summary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
-                                    sentences.forEach(function(sentence) {
-                                        if (sentence.trim().length > 0) {
-                                            summary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
-                                                      '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
-                                                      '<span style="display: block; padding-right: 15px;">' + sentence.trim() + '</span>' + 
-                                                      '</li>';
-                                        }
-                                    });
-                                    summary += '</ul>';
-                                }
-                            } else {
-                                // Already has bullets, format them nicely
-                                summary = summary.replace(/^[-•*]\s*/gm, '');
-                                var lines = summary.split(/\n/).filter(function(l) { return l.trim().length > 0; });
+                        var summaryLength = claudeFrontend.summaryLength || 'medium';
+                        
+                        if (summaryLength === 'short') {
+                            // Always format as bullet points for short summaries
+                            var formattedSummary = '';
+                            
+                            // Check if summary already has bullet indicators
+                            var hasBullets = summary.indexOf('-') !== -1 || 
+                                           summary.indexOf('•') !== -1 || 
+                                           summary.indexOf('*') !== -1 ||
+                                           summary.indexOf('\n-') !== -1 ||
+                                           summary.indexOf('\n•') !== -1;
+                            
+                            if (hasBullets) {
+                                // Split by newlines and process each line
+                                var lines = summary.split(/\n/).filter(function(l) { 
+                                    return l.trim().length > 0 && l.trim() !== '-';
+                                });
+                                
                                 if (lines.length > 0) {
-                                    summary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
+                                    formattedSummary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
                                     lines.forEach(function(line) {
-                                        if (line.trim().length > 0) {
-                                            summary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
-                                                      '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
-                                                      '<span style="display: block; padding-right: 15px;">' + line.trim() + '</span>' + 
-                                                      '</li>';
+                                        // Remove bullet markers if present
+                                        line = line.replace(/^[-•*]\s*/, '').trim();
+                                        if (line.length > 0) {
+                                            formattedSummary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
+                                                              '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
+                                                              '<span style="display: block; padding-right: 15px;">' + line + '</span>' + 
+                                                              '</li>';
                                         }
                                     });
-                                    summary += '</ul>';
-                                } else {
-                                    summary = '<p style="line-height: 1.8;">' + summary + '</p>';
+                                    formattedSummary += '</ul>';
                                 }
                             }
+                            
+                            // If no bullets found or formatting failed, split by sentences
+                            if (!formattedSummary) {
+                                var sentences = summary.split(/[.!?]\s+/).filter(function(s) { 
+                                    return s.trim().length > 0; 
+                                });
+                                
+                                if (sentences.length > 0) {
+                                    formattedSummary = '<ul style="list-style: none; padding-right: 20px; margin: 10px 0; line-height: 1.8;">';
+                                    sentences.forEach(function(sentence) {
+                                        sentence = sentence.trim();
+                                        if (sentence.length > 0) {
+                                            formattedSummary += '<li style="margin-bottom: 10px; padding-right: 20px; position: relative;">' + 
+                                                              '<span style="position: absolute; right: 0; color: ' + (claudeFrontend.panelColor || '#667eea') + '; font-size: 18px; font-weight: bold;">•</span>' + 
+                                                              '<span style="display: block; padding-right: 15px;">' + sentence + '</span>' + 
+                                                              '</li>';
+                                        }
+                                    });
+                                    formattedSummary += '</ul>';
+                                }
+                            }
+                            
+                            // Fallback to paragraph if all else fails
+                            if (!formattedSummary) {
+                                formattedSummary = '<p style="line-height: 1.8;">' + summary + '</p>';
+                            }
+                            
+                            summary = formattedSummary;
                         } else {
                             summary = '<p style="line-height: 1.8;">' + summary + '</p>';
                         }

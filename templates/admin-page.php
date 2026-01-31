@@ -76,16 +76,22 @@ if (!defined('ABSPATH')) {
                             <option value="claude-3-5-sonnet-20241022" <?php selected(get_option('claude_model', 'claude-3-5-sonnet-20241022'), 'claude-3-5-sonnet-20241022'); ?>>
                                 Claude 3.5 Sonnet (מומלץ)
                             </option>
+                            <option value="claude-3-5-haiku-20241022" <?php selected(get_option('claude_model', 'claude-3-5-sonnet-20241022'), 'claude-3-5-haiku-20241022'); ?>>
+                                Claude 3.5 Haiku (מהיר)
+                            </option>
                             <option value="claude-3-opus-20240229" <?php selected(get_option('claude_model', 'claude-3-5-sonnet-20241022'), 'claude-3-opus-20240229'); ?>>
-                                Claude 3 Opus
+                                Claude 3 Opus (ייתכן ולא זמין)
                             </option>
                             <option value="claude-3-sonnet-20240229" <?php selected(get_option('claude_model', 'claude-3-5-sonnet-20241022'), 'claude-3-sonnet-20240229'); ?>>
                                 Claude 3 Sonnet
                             </option>
                             <option value="claude-3-haiku-20240307" <?php selected(get_option('claude_model', 'claude-3-5-sonnet-20241022'), 'claude-3-haiku-20240307'); ?>>
-                                Claude 3 Haiku (מהיר)
+                                Claude 3 Haiku
                             </option>
                         </select>
+                        <p class="description">
+                            ⚠️ אם אתה מקבל שגיאה עם מודל מסוים, נסה מודל אחר. Claude 3.5 Sonnet הוא המומלץ והזמין ביותר.
+                        </p>
                     </td>
                 </tr>
                 
