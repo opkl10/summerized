@@ -6,26 +6,47 @@
     'use strict';
     
     $(document).ready(function() {
+        // Debug: Check if jQuery and wpColorPicker are available
+        if (typeof jQuery === 'undefined') {
+            console.error('Claude AI: jQuery is not loaded!');
+            return;
+        }
+        
+        if (typeof ajaxurl === 'undefined') {
+            console.error('Claude AI: ajaxurl is not defined!');
+        }
+        
+        if (typeof claudeAdmin === 'undefined') {
+            console.error('Claude AI: claudeAdmin is not defined!');
+        }
+        
         // Initialize color picker for button
         if ($.fn.wpColorPicker) {
-            $('#claude_button_color').wpColorPicker({
-                change: function(event, ui) {
-                    $('#claude_button_color_text').val(ui.color.toString());
-                }
-            });
-            
-            // Sync text input with color picker
-            $('#claude_button_color_text').on('input', function() {
-                var color = $(this).val();
-                if (/^#[0-9A-F]{6}$/i.test(color)) {
-                    $('#claude_button_color').wpColorPicker('color', color);
-                }
-            });
+                $('#claude_button_color').wpColorPicker({
+                    change: function(event, ui) {
+                        var color = ui.color.toString();
+                        $('#claude_button_color_text').val(color);
+                        // Update the hidden input value
+                        $('#claude_button_color').val(color);
+                    }
+                });
+                
+                // Sync text input with color picker
+                $('#claude_button_color_text').on('input', function() {
+                    var color = $(this).val();
+                    if (/^#[0-9A-F]{6}$/i.test(color)) {
+                        $('#claude_button_color').wpColorPicker('color', color);
+                        $('#claude_button_color').val(color);
+                    }
+                });
             
             // Initialize color picker for panel
             $('#claude_panel_color').wpColorPicker({
                 change: function(event, ui) {
-                    $('#claude_panel_color_text').val(ui.color.toString());
+                    var color = ui.color.toString();
+                    $('#claude_panel_color_text').val(color);
+                    // Update the hidden input value
+                    $('#claude_panel_color').val(color);
                 }
             });
             
@@ -34,13 +55,17 @@
                 var color = $(this).val();
                 if (/^#[0-9A-F]{6}$/i.test(color)) {
                     $('#claude_panel_color').wpColorPicker('color', color);
+                    $('#claude_panel_color').val(color);
                 }
             });
             
             // Initialize color picker for panel buttons
             $('#claude_panel_buttons_color').wpColorPicker({
                 change: function(event, ui) {
-                    $('#claude_panel_buttons_color_text').val(ui.color.toString());
+                    var color = ui.color.toString();
+                    $('#claude_panel_buttons_color_text').val(color);
+                    // Update the hidden input value
+                    $('#claude_panel_buttons_color').val(color);
                 }
             });
             
@@ -49,6 +74,7 @@
                 var color = $(this).val();
                 if (/^#[0-9A-F]{6}$/i.test(color)) {
                     $('#claude_panel_buttons_color').wpColorPicker('color', color);
+                    $('#claude_panel_buttons_color').val(color);
                 }
             });
         }
@@ -56,6 +82,12 @@
         // Remove icon
         $('#claude-remove-icon').on('click', function() {
             if (confirm('האם אתה בטוח שברצונך להסיר את האייקון?')) {
+                if (typeof ajaxurl === 'undefined' || typeof claudeAdmin === 'undefined') {
+                    alert('שגיאה: ajaxurl או claudeAdmin לא מוגדרים. רענן את הדף.');
+                    console.error('Claude AI: ajaxurl or claudeAdmin is undefined');
+                    return;
+                }
+                
                 $.ajax({
                     url: ajaxurl,
                     type: 'POST',
@@ -66,7 +98,13 @@
                     success: function(response) {
                         if (response.success) {
                             location.reload();
+                        } else {
+                            alert('שגיאה: ' + (response.data && response.data.message ? response.data.message : 'שגיאה לא ידועה'));
                         }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Claude AI: Error removing icon', xhr, status, error);
+                        alert('שגיאה בהסרת אייקון: ' + error);
                     }
                 });
             }
@@ -74,8 +112,14 @@
         
         // Upload icon via AJAX
         $('#claude-upload-icon-btn').on('click', function() {
+            if (typeof ajaxurl === 'undefined' || typeof claudeAdmin === 'undefined') {
+                alert('שגיאה: ajaxurl או claudeAdmin לא מוגדרים. רענן את הדף.');
+                console.error('Claude AI: ajaxurl or claudeAdmin is undefined');
+                return;
+            }
+            
             var fileInput = $('#claude_icon_file')[0];
-            if (!fileInput.files.length) {
+            if (!fileInput || !fileInput.files.length) {
                 alert('אנא בחר קובץ תמונה');
                 return;
             }
@@ -98,17 +142,19 @@
                 processData: false,
                 contentType: false,
                 success: function(response) {
-                    if (response.success) {
+                    if (response && response.success) {
                         $message.html('<div class="notice notice-success inline"><p>אייקון הועלה בהצלחה!</p></div>');
                         setTimeout(function() {
                             location.reload();
                         }, 1000);
                     } else {
-                        $message.html('<div class="notice notice-error inline"><p>' + (response.data.message || 'שגיאה בהעלאת אייקון') + '</p></div>');
+                        var errorMsg = response && response.data && response.data.message ? response.data.message : 'שגיאה בהעלאת אייקון';
+                        $message.html('<div class="notice notice-error inline"><p>' + errorMsg + '</p></div>');
                         $btn.prop('disabled', false).text('העלה אייקון');
                     }
                 },
-                error: function() {
+                error: function(xhr, status, error) {
+                    console.error('Claude AI: Error uploading icon', xhr, status, error);
                     $message.html('<div class="notice notice-error inline"><p>שגיאה בהעלאת אייקון. ודא שזה קובץ תמונה תקין.</p></div>');
                     $btn.prop('disabled', false).text('העלה אייקון');
                 }

@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 3.1.1
+ * Version: 3.1.3
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '3.1.1');
+define('CLAUDE_SUMMARIZER_VERSION', '3.1.3');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -794,6 +794,14 @@ class Claude_AI_Summarizer {
             update_option('claude_show_icon', '1');
         } else {
             update_option('claude_show_icon', '0');
+        }
+        if (isset($_POST['claude_panel_color'])) {
+            $color = sanitize_text_field($_POST['claude_panel_color']);
+            update_option('claude_panel_color', preg_match('/^#[a-fA-F0-9]{6}$/', $color) ? $color : '#667eea');
+        }
+        if (isset($_POST['claude_panel_buttons_color'])) {
+            $color = sanitize_text_field($_POST['claude_panel_buttons_color']);
+            update_option('claude_panel_buttons_color', preg_match('/^#[a-fA-F0-9]{6}$/', $color) ? $color : '#667eea');
         }
         
         // Redirect back to settings page with success message
