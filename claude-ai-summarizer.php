@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 3.0.1
+ * Version: 3.0.3
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '3.0.1');
+define('CLAUDE_SUMMARIZER_VERSION', '3.0.3');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -1239,6 +1239,13 @@ class Claude_AI_Summarizer {
             return false;
         }
         
+        // List all files in source directory for debugging
+        error_log('Claude AI Summarizer: Source directory contents:');
+        $source_files = $this->list_directory_files($extracted_plugin_dir);
+        foreach ($source_files as $file) {
+            error_log('Claude AI Summarizer: Source file: ' . $file);
+        }
+        
         // Copy files from extracted directory to plugin directory
         error_log('Claude AI Summarizer: Copying files from ' . $extracted_plugin_dir . ' to ' . $plugin_path);
         $copy_result = $this->copy_directory($extracted_plugin_dir, $plugin_path);
@@ -1254,9 +1261,33 @@ class Claude_AI_Summarizer {
         $main_plugin_file = $plugin_path . '/' . basename($plugin_file);
         if (!file_exists($main_plugin_file)) {
             error_log('Claude AI Summarizer: Main plugin file not found after copy: ' . $main_plugin_file);
+            error_log('Claude AI Summarizer: Plugin path exists: ' . (is_dir($plugin_path) ? 'Yes' : 'No'));
+            error_log('Claude AI Summarizer: Files in plugin directory:');
+            $dest_files = $this->list_directory_files($plugin_path);
+            foreach ($dest_files as $file) {
+                error_log('Claude AI Summarizer: Dest file: ' . $file);
+            }
             $this->delete_directory($extract_to);
             @unlink($temp_file);
             return false;
+        }
+        
+        // Verify file was actually updated by comparing file sizes or modification times
+        $source_plugin_file = $extracted_plugin_dir . '/' . basename($plugin_file);
+        if (file_exists($source_plugin_file)) {
+            $source_size = filesize($source_plugin_file);
+            $dest_size = filesize($main_plugin_file);
+            error_log('Claude AI Summarizer: File size comparison - Source: ' . $source_size . ', Dest: ' . $dest_size);
+            
+            if ($source_size !== $dest_size) {
+                error_log('Claude AI Summarizer: WARNING - File sizes do not match! Trying to copy again...');
+                // Try to copy again
+                if (!copy($source_plugin_file, $main_plugin_file)) {
+                    error_log('Claude AI Summarizer: Failed to copy plugin file directly');
+                } else {
+                    error_log('Claude AI Summarizer: Plugin file copied directly');
+                }
+            }
         }
         
         // Verify version was updated in the copied file
@@ -1295,6 +1326,9 @@ class Claude_AI_Summarizer {
             error_log('Claude AI Summarizer: Plugin file not found after upgrade');
             return false;
         }
+        
+        // Force file system to sync
+        clearstatcache();
         
         // Mark as updated
         update_option('claude_update_available', '0');
@@ -1367,19 +1401,42 @@ class Claude_AI_Summarizer {
                 }
             } else {
                 // Check if destination file exists and is writable
-                if (file_exists($dest_file) && !is_writable($dest_file)) {
-                    // Try to make it writable
-                    @chmod($dest_file, 0644);
+                if (file_exists($dest_file)) {
+                    // Make sure destination is writable
+                    if (!is_writable($dest_file)) {
+                        @chmod($dest_file, 0644);
+                    }
+                    // Also check if directory is writable
+                    $dest_dir = dirname($dest_file);
+                    if (!is_writable($dest_dir)) {
+                        @chmod($dest_dir, 0755);
+                    }
+                } else {
+                    // Make sure destination directory is writable
+                    $dest_dir = dirname($dest_file);
+                    if (!is_dir($dest_dir)) {
+                        wp_mkdir_p($dest_dir);
+                    }
+                    if (!is_writable($dest_dir)) {
+                        @chmod($dest_dir, 0755);
+                    }
                 }
                 
                 // Copy the file
                 $copy_result = @copy($source_file, $dest_file);
                 
                 if (!$copy_result) {
+                    $error = error_get_last();
                     error_log('Claude AI Summarizer: Failed to copy file: ' . $source_file . ' to ' . $dest_file);
+                    if ($error) {
+                        error_log('Claude AI Summarizer: Copy error: ' . $error['message']);
+                    }
                     $success = false;
                     $failed_files++;
                 } else {
+                    // Clear stat cache
+                    clearstatcache(true, $dest_file);
+                    
                     // Verify the file was copied
                     if (!file_exists($dest_file)) {
                         error_log('Claude AI Summarizer: File copy reported success but file does not exist: ' . $dest_file);
@@ -1391,8 +1448,24 @@ class Claude_AI_Summarizer {
                         $dest_size = filesize($dest_file);
                         if ($source_size !== $dest_size) {
                             error_log('Claude AI Summarizer: File sizes do not match after copy. Source: ' . $source_size . ', Dest: ' . $dest_size);
-                            $success = false;
-                            $failed_files++;
+                            // Try to copy again
+                            $retry_result = @copy($source_file, $dest_file);
+                            if ($retry_result) {
+                                clearstatcache(true, $dest_file);
+                                $dest_size_after = filesize($dest_file);
+                                if ($source_size === $dest_size_after) {
+                                    error_log('Claude AI Summarizer: File copied successfully on retry');
+                                    $copied_files++;
+                                    @chmod($dest_file, 0644);
+                                } else {
+                                    error_log('Claude AI Summarizer: File sizes still do not match after retry');
+                                    $success = false;
+                                    $failed_files++;
+                                }
+                            } else {
+                                $success = false;
+                                $failed_files++;
+                            }
                         } else {
                             $copied_files++;
                             // Set proper permissions
@@ -1430,6 +1503,32 @@ class Claude_AI_Summarizer {
         }
         
         return @rmdir($dir);
+    }
+    
+    /**
+     * List all files in directory recursively
+     */
+    private function list_directory_files($dir, $prefix = '') {
+        $files = array();
+        if (!is_dir($dir)) {
+            return $files;
+        }
+        
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+            
+            $path = $dir . '/' . $item;
+            if (is_dir($path)) {
+                $files = array_merge($files, $this->list_directory_files($path, $prefix . $item . '/'));
+            } else {
+                $files[] = $prefix . $item;
+            }
+        }
+        
+        return $files;
     }
     
     /**
