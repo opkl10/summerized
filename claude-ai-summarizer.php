@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 2.0.0
+ * Version: 2.0.3
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '2.0.0');
+define('CLAUDE_SUMMARIZER_VERSION', '2.0.3');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -302,16 +302,20 @@ class Claude_AI_Summarizer {
         // Add inline CSS for button and panel colors
         $custom_css = "";
         if ($button_color) {
+            $button_darker = $this->adjust_brightness($button_color, -20);
             $custom_css .= "
                 .claude-btn {
-                    background: {$button_color} !important;
+                    background: linear-gradient(135deg, {$button_color} 0%, {$button_darker} 100%) !important;
+                    background-image: linear-gradient(135deg, {$button_color} 0%, {$button_darker} 100%) !important;
                 }
             ";
         }
         if ($panel_color) {
+            $panel_darker = $this->adjust_brightness($panel_color, -30);
             $custom_css .= "
                 .claude-panel-header {
-                    background: linear-gradient(135deg, {$panel_color} 0%, " . $this->adjust_brightness($panel_color, -30) . " 100%) !important;
+                    background: linear-gradient(135deg, {$panel_color} 0%, {$panel_darker} 100%) !important;
+                    background-image: linear-gradient(135deg, {$panel_color} 0%, {$panel_darker} 100%) !important;
                 }
             ";
         }
@@ -1236,6 +1240,7 @@ class Claude_AI_Summarizer {
         }
         
         // Copy files from extracted directory to plugin directory
+        error_log('Claude AI Summarizer: Copying files from ' . $extracted_plugin_dir . ' to ' . $plugin_path);
         $copy_result = $this->copy_directory($extracted_plugin_dir, $plugin_path);
         
         if (!$copy_result) {
@@ -1243,6 +1248,42 @@ class Claude_AI_Summarizer {
             $this->delete_directory($extract_to);
             @unlink($temp_file);
             return false;
+        }
+        
+        // Verify main plugin file was copied
+        $main_plugin_file = $plugin_path . '/' . basename($plugin_file);
+        if (!file_exists($main_plugin_file)) {
+            error_log('Claude AI Summarizer: Main plugin file not found after copy: ' . $main_plugin_file);
+            $this->delete_directory($extract_to);
+            @unlink($temp_file);
+            return false;
+        }
+        
+        // Verify version was updated in the copied file
+        $plugin_data = get_file_data($main_plugin_file, array('Version' => 'Version'), 'plugin');
+        $new_version = !empty($plugin_data['Version']) ? $plugin_data['Version'] : '';
+        
+        if (empty($new_version)) {
+            error_log('Claude AI Summarizer: Could not read version from updated file');
+            // Try to read from define
+            $file_content = file_get_contents($main_plugin_file);
+            if (preg_match("/define\s*\(\s*['\"]CLAUDE_SUMMARIZER_VERSION['\"]\s*,\s*['\"]([^'\"]+)['\"]\s*\)/", $file_content, $matches)) {
+                $new_version = $matches[1];
+            }
+        }
+        
+        if (empty($new_version)) {
+            error_log('Claude AI Summarizer: Version not found in updated file, using provided version: ' . $version);
+            $new_version = $version;
+        }
+        
+        // Verify the version actually changed
+        $current_version = CLAUDE_SUMMARIZER_VERSION;
+        if ($new_version === $current_version) {
+            error_log('Claude AI Summarizer: WARNING - Version did not change after update! Current: ' . $current_version . ', New: ' . $new_version);
+            // Still continue, but log the warning
+        } else {
+            error_log('Claude AI Summarizer: Version updated from ' . $current_version . ' to ' . $new_version);
         }
         
         // Clean up
@@ -1254,10 +1295,6 @@ class Claude_AI_Summarizer {
             error_log('Claude AI Summarizer: Plugin file not found after upgrade');
             return false;
         }
-        
-        // Verify version was updated
-        $plugin_data = get_file_data(WP_PLUGIN_DIR . '/' . $plugin_file, array('Version' => 'Version'), 'plugin');
-        $new_version = !empty($plugin_data['Version']) ? $plugin_data['Version'] : $version;
         
         // Mark as updated
         update_option('claude_update_available', '0');
@@ -1310,6 +1347,9 @@ class Claude_AI_Summarizer {
         }
         
         $success = true;
+        $copied_files = 0;
+        $failed_files = 0;
+        
         while (($file = readdir($dir)) !== false) {
             if ($file === '.' || $file === '..') {
                 continue;
@@ -1321,16 +1361,52 @@ class Claude_AI_Summarizer {
             if (is_dir($source_file)) {
                 if (!$this->copy_directory($source_file, $dest_file)) {
                     $success = false;
+                    $failed_files++;
+                } else {
+                    $copied_files++;
                 }
             } else {
-                if (!copy($source_file, $dest_file)) {
+                // Check if destination file exists and is writable
+                if (file_exists($dest_file) && !is_writable($dest_file)) {
+                    // Try to make it writable
+                    @chmod($dest_file, 0644);
+                }
+                
+                // Copy the file
+                $copy_result = @copy($source_file, $dest_file);
+                
+                if (!$copy_result) {
                     error_log('Claude AI Summarizer: Failed to copy file: ' . $source_file . ' to ' . $dest_file);
                     $success = false;
+                    $failed_files++;
+                } else {
+                    // Verify the file was copied
+                    if (!file_exists($dest_file)) {
+                        error_log('Claude AI Summarizer: File copy reported success but file does not exist: ' . $dest_file);
+                        $success = false;
+                        $failed_files++;
+                    } else {
+                        // Verify file sizes match
+                        $source_size = filesize($source_file);
+                        $dest_size = filesize($dest_file);
+                        if ($source_size !== $dest_size) {
+                            error_log('Claude AI Summarizer: File sizes do not match after copy. Source: ' . $source_size . ', Dest: ' . $dest_size);
+                            $success = false;
+                            $failed_files++;
+                        } else {
+                            $copied_files++;
+                            // Set proper permissions
+                            @chmod($dest_file, 0644);
+                        }
+                    }
                 }
             }
         }
         
         closedir($dir);
+        
+        error_log('Claude AI Summarizer: Copy completed. Files copied: ' . $copied_files . ', Failed: ' . $failed_files);
+        
         return $success;
     }
     

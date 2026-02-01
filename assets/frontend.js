@@ -24,12 +24,20 @@
         
         // Apply custom button color if set
         if (claudeFrontend.buttonColor) {
-            $button.css('background', claudeFrontend.buttonColor);
+            var buttonDarkerColor = adjustBrightness(claudeFrontend.buttonColor, -20);
+            var buttonGradient = 'linear-gradient(135deg, ' + claudeFrontend.buttonColor + ' 0%, ' + buttonDarkerColor + ' 100%)';
+            
+            // Apply with !important using inline style
+            var buttonCurrentStyle = $button.attr('style') || '';
+            $button.attr('style', buttonCurrentStyle + ' background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important;');
+            
             $button.on('mouseenter', function() {
-                $(this).css('background', adjustBrightness(claudeFrontend.buttonColor, -20));
+                var hoverDarker = adjustBrightness(claudeFrontend.buttonColor, -30);
+                var hoverGradient = 'linear-gradient(135deg, ' + adjustBrightness(claudeFrontend.buttonColor, -10) + ' 0%, ' + hoverDarker + ' 100%)';
+                $(this).attr('style', buttonCurrentStyle + ' background: ' + hoverGradient + ' !important; background-image: ' + hoverGradient + ' !important;');
             });
             $button.on('mouseleave', function() {
-                $(this).css('background', claudeFrontend.buttonColor);
+                $(this).attr('style', buttonCurrentStyle + ' background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important;');
             });
         }
         
@@ -86,14 +94,20 @@
             if (panelHeader.length > 0) {
                 var darkerColor = adjustBrightness(claudeFrontend.panelColor, -30);
                 var gradient = 'linear-gradient(135deg, ' + claudeFrontend.panelColor + ' 0%, ' + darkerColor + ' 100%)';
-                // Apply with !important using both methods
+                
+                // Get existing style (preserve padding, display, etc.)
+                var existingStyle = panelHeader.attr('style') || '';
+                // Remove any existing background styles
+                existingStyle = existingStyle.replace(/background[^;]*;?/gi, '').replace(/background-image[^;]*;?/gi, '');
+                
+                // Apply new background with !important using inline style
+                panelHeader.attr('style', existingStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important;');
+                
+                // Also try CSS method as backup
                 panelHeader.css({
-                    'background': gradient + ' !important',
-                    'background-image': gradient + ' !important'
+                    'background': gradient,
+                    'background-image': gradient
                 });
-                // Also set as inline style to ensure it works
-                var currentStyle = panelHeader.attr('style') || '';
-                panelHeader.attr('style', currentStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important;');
             }
         }
         
