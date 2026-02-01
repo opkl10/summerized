@@ -27,17 +27,29 @@
             var buttonDarkerColor = adjustBrightness(claudeFrontend.buttonColor, -20);
             var buttonGradient = 'linear-gradient(135deg, ' + claudeFrontend.buttonColor + ' 0%, ' + buttonDarkerColor + ' 100%)';
             
-            // Apply with !important using inline style
-            var buttonCurrentStyle = $button.attr('style') || '';
-            $button.attr('style', buttonCurrentStyle + ' background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important;');
+            // Clean existing background styles
+            function cleanButtonStyle(style) {
+                if (!style) return '';
+                return style.replace(/background[^;]*;?/gi, '')
+                           .replace(/background-image[^;]*;?/gi, '')
+                           .replace(/background-color[^;]*;?/gi, '');
+            }
+            
+            var buttonCurrentStyle = cleanButtonStyle($button.attr('style'));
+            var newButtonStyle = buttonCurrentStyle + ' background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important;';
+            $button.attr('style', newButtonStyle);
+            
+            // Store base style for hover
+            var baseButtonStyle = newButtonStyle;
             
             $button.on('mouseenter', function() {
                 var hoverDarker = adjustBrightness(claudeFrontend.buttonColor, -30);
                 var hoverGradient = 'linear-gradient(135deg, ' + adjustBrightness(claudeFrontend.buttonColor, -10) + ' 0%, ' + hoverDarker + ' 100%)';
-                $(this).attr('style', buttonCurrentStyle + ' background: ' + hoverGradient + ' !important; background-image: ' + hoverGradient + ' !important;');
+                var currentStyle = cleanButtonStyle($(this).attr('style'));
+                $(this).attr('style', currentStyle + ' background: ' + hoverGradient + ' !important; background-image: ' + hoverGradient + ' !important;');
             });
             $button.on('mouseleave', function() {
-                $(this).attr('style', buttonCurrentStyle + ' background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important;');
+                $(this).attr('style', baseButtonStyle);
             });
         }
         
@@ -95,18 +107,24 @@
                 var darkerColor = adjustBrightness(claudeFrontend.panelColor, -30);
                 var gradient = 'linear-gradient(135deg, ' + claudeFrontend.panelColor + ' 0%, ' + darkerColor + ' 100%)';
                 
-                // Get existing style (preserve padding, display, etc.)
-                var existingStyle = panelHeader.attr('style') || '';
-                // Remove any existing background styles
-                existingStyle = existingStyle.replace(/background[^;]*;?/gi, '').replace(/background-image[^;]*;?/gi, '');
+                // Clean existing background styles but preserve other styles
+                function cleanPanelStyle(style) {
+                    if (!style) return '';
+                    return style.replace(/background[^;]*;?/gi, '')
+                               .replace(/background-image[^;]*;?/gi, '')
+                               .replace(/background-color[^;]*;?/gi, '');
+                }
+                
+                var existingStyle = cleanPanelStyle(panelHeader.attr('style'));
                 
                 // Apply new background with !important using inline style
-                panelHeader.attr('style', existingStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important;');
+                var newStyle = existingStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important;';
+                panelHeader.attr('style', newStyle);
                 
-                // Also try CSS method as backup
+                // Force override with CSS as well
                 panelHeader.css({
-                    'background': gradient,
-                    'background-image': gradient
+                    'background': gradient + ' !important',
+                    'background-image': gradient + ' !important'
                 });
             }
         }
