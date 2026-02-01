@@ -223,6 +223,27 @@ if (!defined('ABSPATH')) {
                 
                 <tr>
                     <th scope="row">
+                        <label for="claude_panel_buttons_color">צבע כפתורים בחלונית</label>
+                    </th>
+                    <td>
+                        <input type="color" 
+                               id="claude_panel_buttons_color" 
+                               name="claude_panel_buttons_color" 
+                               value="<?php echo esc_attr(get_option('claude_panel_buttons_color', '#667eea')); ?>" 
+                               style="width: 100px; height: 40px;" />
+                        <input type="text" 
+                               id="claude_panel_buttons_color_text" 
+                               value="<?php echo esc_attr(get_option('claude_panel_buttons_color', '#667eea')); ?>" 
+                               style="width: 100px; margin-right: 10px;" 
+                               placeholder="#667eea" />
+                        <p class="description">
+                            בחר צבע לכפתורים "העתק" ו"סגור" בתוך חלונית הסיכום
+                        </p>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <th scope="row">
                         <label for="claude_button_text">טקסט כפתור</label>
                     </th>
                     <td>

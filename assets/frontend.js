@@ -111,6 +111,53 @@
             }
         }
         
+        // Apply custom panel buttons color AFTER panel is created
+        if (claudeFrontend.panelButtonsColor) {
+            var copyBtn = $panel.find('.claude-copy-btn');
+            var closeBtnFooter = $panel.find('.claude-close-btn-footer');
+            var buttonsDarker = adjustBrightness(claudeFrontend.panelButtonsColor, -20);
+            
+            if (copyBtn.length > 0) {
+                copyBtn.css({
+                    'background': claudeFrontend.panelButtonsColor + ' !important',
+                    'background-color': claudeFrontend.panelButtonsColor + ' !important'
+                });
+                copyBtn.attr('style', (copyBtn.attr('style') || '') + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important;');
+                copyBtn.on('mouseenter', function() {
+                    $(this).css({
+                        'background': buttonsDarker + ' !important',
+                        'background-color': buttonsDarker + ' !important'
+                    });
+                });
+                copyBtn.on('mouseleave', function() {
+                    $(this).css({
+                        'background': claudeFrontend.panelButtonsColor + ' !important',
+                        'background-color': claudeFrontend.panelButtonsColor + ' !important'
+                    });
+                });
+            }
+            
+            if (closeBtnFooter.length > 0) {
+                closeBtnFooter.css({
+                    'background': claudeFrontend.panelButtonsColor + ' !important',
+                    'background-color': claudeFrontend.panelButtonsColor + ' !important'
+                });
+                closeBtnFooter.attr('style', (closeBtnFooter.attr('style') || '') + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important;');
+                closeBtnFooter.on('mouseenter', function() {
+                    $(this).css({
+                        'background': buttonsDarker + ' !important',
+                        'background-color': buttonsDarker + ' !important'
+                    });
+                });
+                closeBtnFooter.on('mouseleave', function() {
+                    $(this).css({
+                        'background': claudeFrontend.panelButtonsColor + ' !important',
+                        'background-color': claudeFrontend.panelButtonsColor + ' !important'
+                    });
+                });
+            }
+        }
+        
         const $panelContent = $panel.find('.claude-panel-content');
         const $copyBtn = $panel.find('.claude-copy-btn');
         const $closeBtns = $panel.find('.claude-close-btn, .claude-close-btn-footer');

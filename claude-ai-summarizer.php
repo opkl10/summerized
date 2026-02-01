@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 3.0.3
+ * Version: 3.0.5
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '3.0.3');
+define('CLAUDE_SUMMARIZER_VERSION', '3.0.5');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -150,6 +150,11 @@ class Claude_AI_Summarizer {
             'sanitize_callback' => 'sanitize_hex_color',
             'default' => '#667eea'
         ));
+        register_setting('claude_summarizer_settings', 'claude_panel_buttons_color', array(
+            'type' => 'string',
+            'sanitize_callback' => 'sanitize_hex_color',
+            'default' => '#667eea'
+        ));
         register_setting('claude_summarizer_settings', 'claude_button_color', array(
             'type' => 'string',
             'sanitize_callback' => 'sanitize_hex_color',
@@ -274,6 +279,7 @@ class Claude_AI_Summarizer {
         
         $button_color = get_option('claude_button_color', '#667eea');
         $panel_color = get_option('claude_panel_color', '#667eea');
+        $panel_buttons_color = get_option('claude_panel_buttons_color', '#667eea');
         $button_icon = get_option('claude_button_icon', '');
         $button_text = get_option('claude_button_text', 'סכם עם AI');
         $show_icon = get_option('claude_show_icon', '1');
@@ -288,6 +294,7 @@ class Claude_AI_Summarizer {
             'position' => get_option('claude_button_position', 'bottom-left'),
             'buttonColor' => $button_color,
             'panelColor' => $panel_color,
+            'panelButtonsColor' => $panel_buttons_color,
             'buttonIcon' => $button_icon,
             'showIcon' => $show_icon === '1',
             'summaryLength' => $summary_length,
@@ -316,6 +323,23 @@ class Claude_AI_Summarizer {
                 .claude-panel-header {
                     background: linear-gradient(135deg, {$panel_color} 0%, {$panel_darker} 100%) !important;
                     background-image: linear-gradient(135deg, {$panel_color} 0%, {$panel_darker} 100%) !important;
+                }
+            ";
+        }
+        if ($panel_buttons_color) {
+            $buttons_darker = $this->adjust_brightness($panel_buttons_color, -20);
+            $custom_css .= "
+                .claude-copy-btn {
+                    background: {$panel_buttons_color} !important;
+                }
+                .claude-copy-btn:hover {
+                    background: {$buttons_darker} !important;
+                }
+                .claude-close-btn-footer {
+                    background: {$panel_buttons_color} !important;
+                }
+                .claude-close-btn-footer:hover {
+                    background: {$buttons_darker} !important;
                 }
             ";
         }

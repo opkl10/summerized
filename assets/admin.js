@@ -36,6 +36,21 @@
                     $('#claude_panel_color').wpColorPicker('color', color);
                 }
             });
+            
+            // Initialize color picker for panel buttons
+            $('#claude_panel_buttons_color').wpColorPicker({
+                change: function(event, ui) {
+                    $('#claude_panel_buttons_color_text').val(ui.color.toString());
+                }
+            });
+            
+            // Sync text input with panel buttons color picker
+            $('#claude_panel_buttons_color_text').on('input', function() {
+                var color = $(this).val();
+                if (/^#[0-9A-F]{6}$/i.test(color)) {
+                    $('#claude_panel_buttons_color').wpColorPicker('color', color);
+                }
+            });
         }
         
         // Remove icon
