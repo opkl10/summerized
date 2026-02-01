@@ -117,43 +117,41 @@
             var closeBtnFooter = $panel.find('.claude-close-btn-footer');
             var buttonsDarker = adjustBrightness(claudeFrontend.panelButtonsColor, -20);
             
+            // Get existing styles and remove old background/color
+            function cleanStyle(style) {
+                if (!style) return '';
+                return style.replace(/background[^;]*;?/gi, '')
+                           .replace(/background-color[^;]*;?/gi, '')
+                           .replace(/color[^;]*;?/gi, '');
+            }
+            
             if (copyBtn.length > 0) {
-                copyBtn.css({
-                    'background': claudeFrontend.panelButtonsColor + ' !important',
-                    'background-color': claudeFrontend.panelButtonsColor + ' !important'
-                });
-                copyBtn.attr('style', (copyBtn.attr('style') || '') + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important;');
+                var existingStyle = cleanStyle(copyBtn.attr('style'));
+                var newStyle = existingStyle + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important; color: white !important;';
+                copyBtn.attr('style', newStyle);
+                
                 copyBtn.on('mouseenter', function() {
-                    $(this).css({
-                        'background': buttonsDarker + ' !important',
-                        'background-color': buttonsDarker + ' !important'
-                    });
+                    var currentStyle = cleanStyle($(this).attr('style'));
+                    $(this).attr('style', currentStyle + ' background: ' + buttonsDarker + ' !important; background-color: ' + buttonsDarker + ' !important; color: white !important;');
                 });
                 copyBtn.on('mouseleave', function() {
-                    $(this).css({
-                        'background': claudeFrontend.panelButtonsColor + ' !important',
-                        'background-color': claudeFrontend.panelButtonsColor + ' !important'
-                    });
+                    var currentStyle = cleanStyle($(this).attr('style'));
+                    $(this).attr('style', currentStyle + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important; color: white !important;');
                 });
             }
             
             if (closeBtnFooter.length > 0) {
-                closeBtnFooter.css({
-                    'background': claudeFrontend.panelButtonsColor + ' !important',
-                    'background-color': claudeFrontend.panelButtonsColor + ' !important'
-                });
-                closeBtnFooter.attr('style', (closeBtnFooter.attr('style') || '') + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important;');
+                var existingStyle = cleanStyle(closeBtnFooter.attr('style'));
+                var newStyle = existingStyle + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important; color: white !important;';
+                closeBtnFooter.attr('style', newStyle);
+                
                 closeBtnFooter.on('mouseenter', function() {
-                    $(this).css({
-                        'background': buttonsDarker + ' !important',
-                        'background-color': buttonsDarker + ' !important'
-                    });
+                    var currentStyle = cleanStyle($(this).attr('style'));
+                    $(this).attr('style', currentStyle + ' background: ' + buttonsDarker + ' !important; background-color: ' + buttonsDarker + ' !important; color: white !important;');
                 });
                 closeBtnFooter.on('mouseleave', function() {
-                    $(this).css({
-                        'background': claudeFrontend.panelButtonsColor + ' !important',
-                        'background-color': claudeFrontend.panelButtonsColor + ' !important'
-                    });
+                    var currentStyle = cleanStyle($(this).attr('style'));
+                    $(this).attr('style', currentStyle + ' background: ' + claudeFrontend.panelButtonsColor + ' !important; background-color: ' + claudeFrontend.panelButtonsColor + ' !important; color: white !important;');
                 });
             }
         }
