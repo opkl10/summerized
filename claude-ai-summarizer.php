@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 3.0.9
+ * Version: 3.1.1
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '3.0.9');
+define('CLAUDE_SUMMARIZER_VERSION', '3.1.1');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -307,29 +307,35 @@ class Claude_AI_Summarizer {
         ));
         
         // Add inline CSS for button and panel colors
-        // Use higher specificity and !important to override default CSS
+        // Use very high specificity and !important to override default CSS
         $custom_css = "";
         if ($button_color) {
             $button_darker = $this->adjust_brightness($button_color, -20);
+            $button_hover_darker = $this->adjust_brightness($button_color, -30);
+            $button_hover_lighter = $this->adjust_brightness($button_color, -10);
             $custom_css .= "
-                body .claude-btn,
-                body #claude-summarize-btn.claude-btn {
+                html body .claude-btn,
+                html body #claude-summarize-btn.claude-btn,
+                html body .claude-summary-button .claude-btn {
                     background: linear-gradient(135deg, {$button_color} 0%, {$button_darker} 100%) !important;
                     background-image: linear-gradient(135deg, {$button_color} 0%, {$button_darker} 100%) !important;
                     background-color: {$button_color} !important;
                 }
-                body .claude-btn:hover,
-                body #claude-summarize-btn.claude-btn:hover {
-                    background: linear-gradient(135deg, " . $this->adjust_brightness($button_color, -10) . " 0%, " . $this->adjust_brightness($button_color, -30) . " 100%) !important;
-                    background-image: linear-gradient(135deg, " . $this->adjust_brightness($button_color, -10) . " 0%, " . $this->adjust_brightness($button_color, -30) . " 100%) !important;
+                html body .claude-btn:hover,
+                html body #claude-summarize-btn.claude-btn:hover,
+                html body .claude-summary-button .claude-btn:hover {
+                    background: linear-gradient(135deg, {$button_hover_lighter} 0%, {$button_hover_darker} 100%) !important;
+                    background-image: linear-gradient(135deg, {$button_hover_lighter} 0%, {$button_hover_darker} 100%) !important;
+                    background-color: {$button_hover_lighter} !important;
                 }
             ";
         }
         if ($panel_color) {
             $panel_darker = $this->adjust_brightness($panel_color, -30);
             $custom_css .= "
-                body .claude-panel-header,
-                body #claude-summary-panel .claude-panel-header {
+                html body .claude-panel-header,
+                html body #claude-summary-panel .claude-panel-header,
+                html body .claude-summary-panel .claude-panel-header {
                     background: linear-gradient(135deg, {$panel_color} 0%, {$panel_darker} 100%) !important;
                     background-image: linear-gradient(135deg, {$panel_color} 0%, {$panel_darker} 100%) !important;
                     background-color: {$panel_color} !important;
@@ -339,22 +345,30 @@ class Claude_AI_Summarizer {
         if ($panel_buttons_color) {
             $buttons_darker = $this->adjust_brightness($panel_buttons_color, -20);
             $custom_css .= "
-                .claude-copy-btn {
+                html body .claude-copy-btn,
+                html body #claude-summary-panel .claude-copy-btn,
+                html body .claude-summary-panel .claude-copy-btn {
                     background: {$panel_buttons_color} !important;
                     background-color: {$panel_buttons_color} !important;
                     color: white !important;
                 }
-                .claude-copy-btn:hover {
+                html body .claude-copy-btn:hover,
+                html body #claude-summary-panel .claude-copy-btn:hover,
+                html body .claude-summary-panel .claude-copy-btn:hover {
                     background: {$buttons_darker} !important;
                     background-color: {$buttons_darker} !important;
                     color: white !important;
                 }
-                .claude-close-btn-footer {
+                html body .claude-close-btn-footer,
+                html body #claude-summary-panel .claude-close-btn-footer,
+                html body .claude-summary-panel .claude-close-btn-footer {
                     background: {$panel_buttons_color} !important;
                     background-color: {$panel_buttons_color} !important;
                     color: white !important;
                 }
-                .claude-close-btn-footer:hover {
+                html body .claude-close-btn-footer:hover,
+                html body #claude-summary-panel .claude-close-btn-footer:hover,
+                html body .claude-summary-panel .claude-close-btn-footer:hover {
                     background: {$buttons_darker} !important;
                     background-color: {$buttons_darker} !important;
                     color: white !important;
@@ -362,6 +376,7 @@ class Claude_AI_Summarizer {
             ";
         }
         if ($custom_css) {
+            // Add with high priority to ensure it loads after default CSS
             wp_add_inline_style('claude-frontend-style', $custom_css);
         }
     }

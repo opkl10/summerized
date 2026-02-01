@@ -6,6 +6,9 @@
     'use strict';
     
     $(document).ready(function() {
+        // Debug: Log available colors
+        console.log('Claude AI: Available colors - Button:', claudeFrontend.buttonColor, 'Panel:', claudeFrontend.panelColor, 'Panel Buttons:', claudeFrontend.panelButtonsColor);
+        
         const $button = $('#claude-summarize-btn');
         
         // Determine panel position based on button position
@@ -24,6 +27,7 @@
         
         // Apply custom button color if set
         if (claudeFrontend.buttonColor) {
+            console.log('Claude AI: Applying button color:', claudeFrontend.buttonColor);
             var buttonDarkerColor = adjustBrightness(claudeFrontend.buttonColor, -20);
             var buttonGradient = 'linear-gradient(135deg, ' + claudeFrontend.buttonColor + ' 0%, ' + buttonDarkerColor + ' 100%)';
             
@@ -35,9 +39,24 @@
                            .replace(/background-color[^;]*;?/gi, '');
             }
             
-            var buttonCurrentStyle = cleanButtonStyle($button.attr('style'));
-            var newButtonStyle = buttonCurrentStyle + ' background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important;';
+            // Remove all existing inline styles first
+            $button.removeAttr('style');
+            
+            // Apply new style
+            var newButtonStyle = 'background: ' + buttonGradient + ' !important; background-image: ' + buttonGradient + ' !important; background-color: ' + claudeFrontend.buttonColor + ' !important;';
             $button.attr('style', newButtonStyle);
+            
+            // Also apply via CSS with higher specificity
+            $button.css({
+                'background': buttonGradient + ' !important',
+                'background-image': buttonGradient + ' !important',
+                'background-color': claudeFrontend.buttonColor + ' !important'
+            });
+            
+            // Force a reflow to ensure styles are applied
+            if ($button[0]) {
+                $button[0].offsetHeight;
+            }
             
             // Store base style for hover
             var baseButtonStyle = newButtonStyle;
@@ -46,7 +65,7 @@
                 var hoverDarker = adjustBrightness(claudeFrontend.buttonColor, -30);
                 var hoverGradient = 'linear-gradient(135deg, ' + adjustBrightness(claudeFrontend.buttonColor, -10) + ' 0%, ' + hoverDarker + ' 100%)';
                 var currentStyle = cleanButtonStyle($(this).attr('style'));
-                $(this).attr('style', currentStyle + ' background: ' + hoverGradient + ' !important; background-image: ' + hoverGradient + ' !important;');
+                $(this).attr('style', currentStyle + ' background: ' + hoverGradient + ' !important; background-image: ' + hoverGradient + ' !important; background-color: ' + adjustBrightness(claudeFrontend.buttonColor, -10) + ' !important;');
             });
             $button.on('mouseleave', function() {
                 $(this).attr('style', baseButtonStyle);
@@ -107,25 +126,28 @@
                 var darkerColor = adjustBrightness(claudeFrontend.panelColor, -30);
                 var gradient = 'linear-gradient(135deg, ' + claudeFrontend.panelColor + ' 0%, ' + darkerColor + ' 100%)';
                 
-                // Clean existing background styles but preserve other styles
-                function cleanPanelStyle(style) {
-                    if (!style) return '';
-                    return style.replace(/background[^;]*;?/gi, '')
-                               .replace(/background-image[^;]*;?/gi, '')
-                               .replace(/background-color[^;]*;?/gi, '');
-                }
+                // Get existing style and preserve non-background properties
+                var existingStyle = panelHeader.attr('style') || '';
+                // Remove only background-related styles
+                existingStyle = existingStyle.replace(/background[^;]*;?/gi, '')
+                                           .replace(/background-image[^;]*;?/gi, '')
+                                           .replace(/background-color[^;]*;?/gi, '');
                 
-                var existingStyle = cleanPanelStyle(panelHeader.attr('style'));
-                
-                // Apply new background with !important using inline style
-                var newStyle = existingStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important;';
+                // Apply new background with !important using inline style - this is the strongest
+                var newStyle = existingStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important; background-color: ' + claudeFrontend.panelColor + ' !important;';
                 panelHeader.attr('style', newStyle);
                 
-                // Force override with CSS as well
+                // Also force with CSS method with !important
                 panelHeader.css({
                     'background': gradient + ' !important',
-                    'background-image': gradient + ' !important'
+                    'background-image': gradient + ' !important',
+                    'background-color': claudeFrontend.panelColor + ' !important'
                 });
+                
+                // Force a reflow to ensure styles are applied
+                if (panelHeader[0]) {
+                    panelHeader[0].offsetHeight;
+                }
             }
         }
         
