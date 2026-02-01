@@ -33,11 +33,6 @@
             });
         }
         
-        // Apply custom panel color if set
-        if (claudeFrontend.panelColor) {
-            $panel.find('.claude-panel-header').css('background', 'linear-gradient(135deg, ' + claudeFrontend.panelColor + ' 0%, ' + adjustBrightness(claudeFrontend.panelColor, -30) + ' 100%)');
-        }
-        
         // Apply custom icon if set and show_icon is enabled
         if (claudeFrontend.showIcon) {
             if (claudeFrontend.buttonIcon) {
@@ -84,6 +79,23 @@
         `);
         
         $('body').append($panel);
+        
+        // Apply custom panel color AFTER panel is created
+        if (claudeFrontend.panelColor) {
+            var panelHeader = $panel.find('.claude-panel-header');
+            if (panelHeader.length > 0) {
+                var darkerColor = adjustBrightness(claudeFrontend.panelColor, -30);
+                var gradient = 'linear-gradient(135deg, ' + claudeFrontend.panelColor + ' 0%, ' + darkerColor + ' 100%)';
+                // Apply with !important using both methods
+                panelHeader.css({
+                    'background': gradient + ' !important',
+                    'background-image': gradient + ' !important'
+                });
+                // Also set as inline style to ensure it works
+                var currentStyle = panelHeader.attr('style') || '';
+                panelHeader.attr('style', currentStyle + ' background: ' + gradient + ' !important; background-image: ' + gradient + ' !important;');
+            }
+        }
         
         const $panelContent = $panel.find('.claude-panel-content');
         const $copyBtn = $panel.find('.claude-copy-btn');

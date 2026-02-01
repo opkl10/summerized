@@ -91,6 +91,11 @@ if (!defined('ABSPATH')) {
                         </select>
                         <p class="description">
                             ⚠️ אם אתה מקבל שגיאה עם מודל מסוים, נסה מודל אחר. Claude 3.5 Sonnet הוא המומלץ והזמין ביותר.
+                            <br>
+                            <strong>טיפ:</strong> אם כל המודלים נותנים שגיאה, בדוק:
+                            <br>1. שה-API Key תקין ופעיל
+                            <br>2. שיש לך גישה למודלים ב-Anthropic Console
+                            <br>3. שה-API Key לא פג תוקף
                         </p>
                     </td>
                 </tr>

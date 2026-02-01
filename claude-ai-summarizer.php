@@ -3,7 +3,7 @@
  * Plugin Name: Claude AI Summarizer
  * Plugin URI: https://github.com/YOUR_USERNAME/claude-ai-summarizer
  * Description: סיכום פוסטים ומאמרים חכם באמצעות Claude AI. מוסיף כפתור סיכום אוטומטי לכל פוסט.
- * Version: 1.4.6
+ * Version: 1.4.10
  * Author: Your Name
  * Author URI: https://yourwebsite.com
  * License: GPL v2 or later
@@ -18,7 +18,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('CLAUDE_SUMMARIZER_VERSION', '1.4.6');
+define('CLAUDE_SUMMARIZER_VERSION', '1.4.10');
 define('CLAUDE_SUMMARIZER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('CLAUDE_SUMMARIZER_PLUGIN_URL', plugin_dir_url(__FILE__));
 
@@ -545,7 +545,8 @@ class Claude_AI_Summarizer {
                         'content' => $prompt
                     )
                 )
-            ))
+            )),
+            'sslverify' => true
         ));
         
         if (is_wp_error($response)) {
@@ -560,21 +561,41 @@ class Claude_AI_Summarizer {
         if ($status_code !== 200) {
             $error_message = 'Unknown error from Claude API';
             
+            // Log full response for debugging
+            error_log('Claude AI Summarizer API Response Code: ' . $status_code);
+            error_log('Claude AI Summarizer API Response Body: ' . $body);
+            error_log('Claude AI Summarizer API Model Used: ' . $model);
+            
             if (isset($data['error'])) {
                 if (isset($data['error']['message'])) {
                     $error_message = $data['error']['message'];
                 } elseif (isset($data['error']['type'])) {
                     $error_message = $data['error']['type'];
+                } elseif (is_string($data['error'])) {
+                    $error_message = $data['error'];
+                }
+            }
+            
+            // Check for specific error types
+            if (isset($data['error']['type'])) {
+                $error_type = $data['error']['type'];
+                if ($error_type === 'invalid_request_error' && isset($data['error']['message'])) {
+                    // Model might not be available or API key issue
+                    if (strpos($data['error']['message'], 'model') !== false || strpos($data['error']['message'], $model) !== false) {
+                        $error_message = sprintf(
+                            __('המודל %s לא זמין או לא תקין. נסה מודל אחר או בדוק את ה-API Key שלך ב-Anthropic Console.', 'claude-ai-summarizer'),
+                            $model
+                        );
+                    } else {
+                        $error_message = $data['error']['message'];
+                    }
                 }
             }
             
             // Add model info to error message if available
-            if ($model) {
+            if ($model && strpos($error_message, $model) === false) {
                 $error_message = sprintf(__('Model: %s. Error: %s', 'claude-ai-summarizer'), $model, $error_message);
             }
-            
-            // Log full error for debugging
-            error_log('Claude AI Summarizer API Error: ' . json_encode($data));
             
             return new WP_Error('claude_api_error', $error_message);
         }
@@ -924,22 +945,20 @@ class Claude_AI_Summarizer {
      * Check for updates from GitHub
      */
     public function check_for_updates() {
-        $auto_update = get_option('claude_auto_update', '0');
-        if ($auto_update !== '1') {
-            return;
-        }
-        
         $github_repo = get_option('claude_github_repo', '');
         if (!$github_repo) {
+            error_log('Claude AI Summarizer: GitHub repository not configured for update check');
             return;
         }
         
         // Check once every 2 hours (unless webhook triggered)
         $last_check = get_option('claude_last_update_check', 0);
         if ((time() - $last_check) < 7200) { // Check at most once per 2 hours
+            error_log('Claude AI Summarizer: Update check skipped (last check was less than 2 hours ago)');
             return;
         }
         
+        error_log('Claude AI Summarizer: Starting scheduled update check');
         $this->check_and_update_from_github();
     }
     
@@ -1238,11 +1257,16 @@ class Claude_AI_Summarizer {
         
         // Verify version was updated
         $plugin_data = get_file_data(WP_PLUGIN_DIR . '/' . $plugin_file, array('Version' => 'Version'), 'plugin');
-        $new_version = !empty($plugin_data['Version']) ? $plugin_data['Version'] : '';
+        $new_version = !empty($plugin_data['Version']) ? $plugin_data['Version'] : $version;
         
         // Mark as updated
         update_option('claude_update_available', '0');
-        update_option('claude_last_update_version', $version);
+        update_option('claude_last_update_version', $new_version);
+        delete_option('claude_update_download_url');
+        delete_option('claude_update_error');
+        
+        // Clear last check to force fresh check next time
+        delete_option('claude_last_update_check');
         
         // Activate plugin if needed
         if (!is_plugin_active($plugin_file)) {
@@ -1252,12 +1276,13 @@ class Claude_AI_Summarizer {
         // Clear any caches
         wp_cache_flush();
         
+        // Force WordPress to reload plugin data
+        delete_transient('claude_plugin_data');
+        
         // Log success
-        if (!empty($new_version)) {
-            error_log('Claude AI Summarizer: Successfully upgraded to version ' . $new_version);
-        } else {
-            error_log('Claude AI Summarizer: Upgrade completed (version verification skipped)');
-        }
+        error_log('Claude AI Summarizer: Successfully upgraded to version ' . $new_version);
+        error_log('Claude AI Summarizer: Plugin file path: ' . WP_PLUGIN_DIR . '/' . $plugin_file);
+        error_log('Claude AI Summarizer: Plugin file exists: ' . (file_exists(WP_PLUGIN_DIR . '/' . $plugin_file) ? 'Yes' : 'No'));
         
         return true;
     }
@@ -1448,9 +1473,15 @@ class Claude_AI_Summarizer {
             restore_error_handler();
             
             if ($result) {
+                // Reload plugin data to get new version
+                $plugin_file = plugin_basename(__FILE__);
+                $plugin_data = get_file_data(WP_PLUGIN_DIR . '/' . $plugin_file, array('Version' => 'Version'), 'plugin');
+                $installed_version = !empty($plugin_data['Version']) ? $plugin_data['Version'] : $version;
+                
                 wp_send_json_success(array(
-                    'message' => sprintf(__('Update installed successfully! Version %s is now active.', 'claude-ai-summarizer'), $version),
-                    'version' => $version
+                    'message' => sprintf(__('Update installed successfully! Version %s is now active. Please refresh the page to see the changes.', 'claude-ai-summarizer'), $installed_version),
+                    'version' => $installed_version,
+                    'reload' => true
                 ));
             } else {
                 $error_message = __('Failed to install update. ', 'claude-ai-summarizer');
